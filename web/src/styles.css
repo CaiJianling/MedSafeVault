@@ -1,0 +1,1044 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@theme inline {
+  /* Indirection: `inline` bakes the *text* of these values into the utilities,
+     so pointing at our own variables keeps the runtime font pickers effective. */
+  --font-sans: var(--msv-font-sans);
+  --font-display: var(--msv-font-display);
+  --font-mono: var(--msv-font-mono);
+
+  --color-ink-950: var(--msv-ink-950);
+  --color-ink-900: var(--msv-ink-900);
+  --color-ink-850: var(--msv-ink-850);
+  --color-ink-800: var(--msv-ink-800);
+  --color-ink-750: var(--msv-ink-750);
+  --color-ink-700: var(--msv-ink-700);
+
+  --color-mint-200: var(--msv-mint-200);
+  --color-mint-300: var(--msv-mint-300);
+  --color-mint-400: var(--msv-mint-400);
+  --color-mint-500: var(--msv-mint-500);
+
+  --color-ice-200: var(--msv-ice-200);
+  --color-ice-300: var(--msv-ice-300);
+  --color-ice-400: var(--msv-ice-400);
+  --color-ice-500: var(--msv-ice-500);
+  --color-ice-600: var(--msv-ice-600);
+
+  --color-line: var(--msv-line);
+  --color-line-strong: var(--msv-line-strong);
+}
+
+/* ------------------------------------------------------------------ themes */
+
+:root {
+  /* Font stacks. Settings replaces the leading family; the tail guarantees a
+     CJK-capable fallback so Chinese text never falls back to a box. */
+  --msv-font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+    "PingFang SC", system-ui, sans-serif;
+  --msv-font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI",
+    "PingFang SC", system-ui, sans-serif;
+  --msv-font-mono: "JetBrains Mono", "Cascadia Mono", "Cascadia Code", "SF Mono",
+    Menlo, Consolas, "DejaVu Sans Mono", "Sarasa Mono SC", "Microsoft YaHei Mono",
+    "Microsoft YaHei UI", monospace;
+
+  /* Light is the default. `.dark` is applied to <html> by HeroUI useTheme. */
+  --msv-ink-950: #eef3f9;
+  --msv-ink-900: #ffffff;
+  --msv-ink-850: #ffffff;
+  --msv-ink-800: #ffffff;
+  --msv-ink-750: #f6f9fd;
+  --msv-ink-700: #e8eef6;
+
+  --msv-ice-200: #101828;
+  --msv-ice-300: #2c3a4d;
+  --msv-ice-400: #45566b;
+  --msv-ice-500: #4e6076;
+  --msv-ice-600: #5f7186;
+
+  --msv-line: rgba(20, 36, 56, 0.11);
+  --msv-line-strong: rgba(20, 36, 56, 0.2);
+
+  --msv-mint-200: #bfdbfe;
+  --msv-mint-300: #1d4ed8;
+  --msv-mint-400: #2563eb;
+  --msv-mint-500: #1d4ed8;
+
+  /* Accent: one hue drives every highlight, ring and tinted surface.
+     The lightness per theme is solved for WCAG AA against the real surfaces. */
+  --msv-h: 221;
+  --msv-s: 83%;
+  --msv-l-text: 53.5%;
+  --msv-l-fill: 56%;
+  --msv-d-text: 69%;
+  --msv-d-fill: 59.5%;
+
+
+  --msv-danger-text: #be123c;
+  --msv-warning-text: #b45309;
+  --msv-success-text: #047857;
+
+  --msv-tint: color-mix(in srgb, #101828 3.2%, transparent);
+  --msv-tint-strong: color-mix(in srgb, #101828 6.5%, transparent);
+  --msv-tint-hover: color-mix(in srgb, #101828 9%, transparent);
+
+  --msv-surface: #ffffff;
+  --msv-surface-soft: #f7f9fd;
+  --msv-table-head: #f4f7fb;
+  --msv-table-sticky: #fbfcfe;
+  --msv-table-sticky-hover: #f2f6fb;
+  --msv-tooltip-bg: #172033;
+  --msv-tooltip-fg: #f3f7fd;
+
+  --msv-grid: rgba(20, 36, 56, 0.045);
+  --msv-glow-b: rgba(14, 165, 233, 0.09);
+  --msv-glow-c: rgba(99, 102, 241, 0.06);
+
+  --msv-select-arrow: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235d6f85' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  color-scheme: light;
+
+  /* HeroUI variables – light */
+  --background: #eef3f9;
+  --foreground: #101828;
+  --snow: #ffffff;
+  --surface: #ffffff;
+  --surface-foreground: #101828;
+  --surface-secondary: #f6f9fd;
+  --surface-secondary-foreground: #101828;
+  --surface-tertiary: #eef3f9;
+  --surface-tertiary-foreground: #101828;
+  --overlay: #ffffff;
+  --overlay-foreground: #101828;
+  --field-background: #ffffff;
+  --field-foreground: #101828;
+  --field-placeholder: #64768b;
+  --border: rgba(20, 36, 56, 0.12);
+  --separator: rgba(20, 36, 56, 0.09);
+  --default: #edf2f8;
+  --default-foreground: #2c3a4d;
+  --muted: #4e6076;
+  --accent: var(--msv-accent);
+  --accent-foreground: var(--msv-accent-contrast);
+  --focus: var(--msv-accent);
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
+  --success: #059669;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --backdrop: rgba(15, 23, 42, 0.38);
+  --radius: 0.625rem;
+  --field-radius: 0.625rem;
+
+  /* Status shades tuned for light surfaces */
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-rose-200: #9f1239;
+  --color-rose-300: #be123c;
+  --color-rose-400: #e11d48;
+  --color-rose-500: #be123c;
+  --color-amber-100: #92400e;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-indigo-200: #3730a3;
+  --color-indigo-300: #4338ca;
+  --color-indigo-400: #4f46e5;
+  --color-indigo-500: #4338ca;
+  --color-sky-300: #0369a1;
+  --color-sky-400: #0284c7;
+  --color-cyan-300: #0e7490;
+  --color-cyan-600: #155e75;
+}
+
+.dark {
+  --msv-ink-950: #090d13;
+  --msv-ink-900: #0e141d;
+  --msv-ink-850: #121a25;
+  --msv-ink-800: #16202c;
+  --msv-ink-750: #1b2735;
+  --msv-ink-700: #22303f;
+
+  --msv-ice-200: #f1f5fb;
+  --msv-ice-300: #d4deea;
+  --msv-ice-400: #adbccd;
+  --msv-ice-500: #a9b9cb;
+  --msv-ice-600: #8fa1b6;
+
+  --msv-line: rgba(178, 198, 222, 0.15);
+  --msv-line-strong: rgba(178, 198, 222, 0.27);
+
+  --msv-mint-200: #bfdbfe;
+  --msv-mint-300: #8ab8ff;
+  --msv-mint-400: #5b93f5;
+  --msv-mint-500: #3b78ea;
+
+
+  --msv-danger-text: #fda4af;
+  --msv-warning-text: #fcd34d;
+  --msv-success-text: #6ee7b7;
+
+  --msv-tint: color-mix(in srgb, #ffffff 3.4%, transparent);
+  --msv-tint-strong: color-mix(in srgb, #ffffff 6.8%, transparent);
+  --msv-tint-hover: color-mix(in srgb, #ffffff 10%, transparent);
+
+  --msv-surface: #121a25;
+  --msv-surface-soft: #101720;
+  --msv-table-head: #0f1721;
+  --msv-table-sticky: #101823;
+  --msv-table-sticky-hover: #14202c;
+  --msv-tooltip-bg: #202c3c;
+  --msv-tooltip-fg: #f1f5fb;
+
+  --msv-grid: rgba(178, 198, 222, 0.05);
+  --msv-glow-b: rgba(14, 165, 233, 0.1);
+  --msv-glow-c: rgba(99, 102, 241, 0.12);
+
+  --msv-select-arrow: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b9bad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  color-scheme: dark;
+
+  /* HeroUI variables – dark */
+  --background: #090d13;
+  --foreground: #f1f5fb;
+  --surface: #121a25;
+  --surface-foreground: #f1f5fb;
+  --surface-secondary: #16202c;
+  --surface-secondary-foreground: #f1f5fb;
+  --surface-tertiary: #1b2735;
+  --surface-tertiary-foreground: #f1f5fb;
+  --overlay: #16202c;
+  --overlay-foreground: #f1f5fb;
+  --field-background: #111923;
+  --field-foreground: #f1f5fb;
+  --field-placeholder: #8496ab;
+  --border: rgba(178, 198, 222, 0.17);
+  --separator: rgba(178, 198, 222, 0.13);
+  --default: #1b2735;
+  --default-foreground: #d4deea;
+  --muted: #a9b9cb;
+  --accent: var(--msv-accent);
+  --accent-foreground: var(--msv-accent-contrast);
+  --focus: var(--msv-accent);
+  --danger: #f87171;
+  --danger-foreground: #1a0505;
+  --success: #34d399;
+  --success-foreground: #04120b;
+  --warning: #fbbf24;
+  --warning-foreground: #1b1203;
+  --backdrop: rgba(2, 6, 12, 0.72);
+
+}
+
+
+/* ---------------------------------------------------------------- accents */
+
+/* Each palette ships the lightness its theme needs; every value below was
+   solved so text, icons and button labels stay above 4.5:1. */
+[data-accent='blue'] {
+  --msv-h: 221;
+  --msv-s: 83%;
+  --msv-l-text: 53.5%;
+  --msv-l-fill: 56%;
+  --msv-d-text: 69%;
+  --msv-d-fill: 59.5%;
+}
+[data-accent='sky'] {
+  --msv-h: 202;
+  --msv-s: 84%;
+  --msv-l-text: 36.5%;
+  --msv-l-fill: 39%;
+  --msv-d-text: 60%;
+  --msv-d-fill: 52%;
+}
+[data-accent='cyan'] {
+  --msv-h: 188;
+  --msv-s: 86%;
+  --msv-l-text: 28.5%;
+  --msv-l-fill: 30.5%;
+  --msv-d-text: 60%;
+  --msv-d-fill: 52%;
+}
+[data-accent='teal'] {
+  --msv-h: 168;
+  --msv-s: 76%;
+  --msv-l-text: 27%;
+  --msv-l-fill: 29%;
+  --msv-d-text: 60%;
+  --msv-d-fill: 52%;
+}
+[data-accent='emerald'] {
+  --msv-h: 152;
+  --msv-s: 69%;
+  --msv-l-text: 28.5%;
+  --msv-l-fill: 31%;
+  --msv-d-text: 60%;
+  --msv-d-fill: 52%;
+}
+[data-accent='violet'] {
+  --msv-h: 262;
+  --msv-s: 72%;
+  --msv-l-text: 58%;
+  --msv-l-fill: 58%;
+  --msv-d-text: 73%;
+  --msv-d-fill: 64.5%;
+}
+[data-accent='rose'] {
+  --msv-h: 340;
+  --msv-s: 75%;
+  --msv-l-text: 46.5%;
+  --msv-l-fill: 50.5%;
+  --msv-d-text: 68%;
+  --msv-d-fill: 55%;
+}
+[data-accent='amber'] {
+  --msv-h: 32;
+  --msv-s: 90%;
+  --msv-l-text: 34%;
+  --msv-l-fill: 36%;
+  --msv-d-text: 60%;
+  --msv-d-fill: 52%;
+}
+
+/* The accent tokens are derived, so the derivation itself has to live in a rule
+   that also matches the small preview swatches in Settings — a custom property
+   is resolved where it is declared, not where it is used. */
+:root,
+[data-accent] {
+  --msv-accent: hsl(var(--msv-h), var(--msv-s), var(--msv-l-fill));
+  --msv-accent-strong: hsl(var(--msv-h), var(--msv-s), calc(var(--msv-l-fill) - 7%));
+  --msv-accent-contrast: #ffffff;
+  --msv-accent-text: hsl(var(--msv-h), calc(var(--msv-s) + 4%), var(--msv-l-text));
+  --msv-accent-soft: hsla(var(--msv-h), var(--msv-s), var(--msv-l-fill), 0.1);
+  --color-teal-100: hsl(var(--msv-h), calc(var(--msv-s) - 8%), calc(var(--msv-l-text) - 14%));
+  --color-teal-200: hsl(var(--msv-h), calc(var(--msv-s) - 4%), calc(var(--msv-l-text) - 7%));
+  --color-teal-300: hsl(var(--msv-h), calc(var(--msv-s) + 4%), var(--msv-l-text));
+  --color-teal-400: hsl(var(--msv-h), var(--msv-s), var(--msv-l-fill));
+  --color-teal-500: hsl(var(--msv-h), var(--msv-s), calc(var(--msv-l-fill) + 8%));
+  --msv-glow-a: hsla(var(--msv-h), var(--msv-s), var(--msv-l-fill), 0.12);
+  --accent: var(--msv-accent);
+  --accent-foreground: var(--msv-accent-contrast);
+  --focus: var(--msv-accent);
+}
+
+.dark,
+.dark [data-accent] {
+  --msv-accent: hsl(var(--msv-h), calc(var(--msv-s) + 4%), var(--msv-d-fill));
+  --msv-accent-strong: hsl(var(--msv-h), calc(var(--msv-s) + 6%), calc(var(--msv-d-fill) + 12%));
+  --msv-accent-contrast: hsl(var(--msv-h), 62%, 7%);
+  --msv-accent-text: hsl(var(--msv-h), calc(var(--msv-s) + 6%), var(--msv-d-text));
+  --msv-accent-soft: hsla(var(--msv-h), calc(var(--msv-s) + 4%), var(--msv-d-fill), 0.17);
+  --color-teal-100: hsl(var(--msv-h), calc(var(--msv-s) + 8%), calc(var(--msv-d-text) + 12%));
+  --color-teal-200: hsl(var(--msv-h), calc(var(--msv-s) + 6%), calc(var(--msv-d-text) + 7%));
+  --color-teal-300: hsl(var(--msv-h), calc(var(--msv-s) + 6%), var(--msv-d-text));
+  --color-teal-400: hsl(var(--msv-h), calc(var(--msv-s) + 4%), var(--msv-d-fill));
+  --color-teal-500: hsl(var(--msv-h), calc(var(--msv-s) + 4%), calc(var(--msv-d-fill) - 12%));
+  --msv-glow-a: hsla(var(--msv-h), var(--msv-s), var(--msv-d-fill), 0.18);
+}
+
+@layer base {
+  * {
+    border-color: var(--msv-line);
+  }
+
+  /* Interface size: every dimension in the app is expressed in rem, so the
+     root font size acts as the small / standard / large layout scale. */
+  html {
+    font-size: 16px;
+  }
+
+  html[data-ui-scale='small'] {
+    font-size: 14.4px;
+  }
+
+  html[data-ui-scale='large'] {
+    font-size: 17.6px;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--msv-ink-950);
+    color: var(--msv-ice-200);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--msv-accent) 24%, transparent);
+    color: var(--msv-ice-200);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--msv-ice-500) 34%, transparent) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--msv-ice-500) 32%, transparent);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--msv-ice-400) 52%, transparent);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+}
+
+/* ---------------------------------------------------------------- surfaces */
+
+.vault-bg {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(1100px 620px at 10% -14%, var(--msv-glow-a), transparent 62%),
+    radial-gradient(900px 560px at 102% -8%, var(--msv-glow-c), transparent 58%),
+    radial-gradient(820px 520px at 58% 116%, var(--msv-glow-b), transparent 62%),
+    linear-gradient(180deg, var(--msv-ink-950) 0%, var(--msv-ink-950) 55%, var(--msv-ink-900) 100%);
+}
+
+.vault-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--msv-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--msv-grid) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 5%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 5%, transparent 78%);
+}
+
+.panel {
+  background: color-mix(in srgb, var(--msv-surface) 94%, var(--msv-ink-950));
+  border: 1px solid var(--msv-line);
+  box-shadow:
+    0 24px 60px -42px rgba(15, 23, 42, 0.5),
+    0 2px 6px -4px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 40%, transparent);
+}
+
+.dark .panel {
+  background: color-mix(in srgb, var(--msv-surface) 92%, transparent);
+  box-shadow:
+    0 30px 70px -44px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.panel-soft {
+  background: color-mix(in srgb, var(--msv-surface) 62%, transparent);
+  border: 1px solid var(--msv-line);
+}
+
+.glass-bar {
+  background: color-mix(in srgb, var(--msv-ink-900) 88%, transparent);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--msv-line);
+}
+
+.brand-gradient {
+  background: linear-gradient(120deg, #0f172a 4%, #1d4ed8 46%, #0e7490 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.dark .brand-gradient {
+  background: linear-gradient(120deg, #f8fafc 4%, #bfdbfe 42%, #7dd3fc 72%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mint-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--msv-accent) 24%, transparent),
+    0 14px 34px -18px color-mix(in srgb, var(--msv-accent) 55%, transparent);
+}
+
+.brand-mark {
+  background: linear-gradient(145deg, var(--msv-accent-strong), var(--msv-accent));
+  box-shadow:
+    0 8px 24px -10px color-mix(in srgb, var(--msv-accent) 62%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+.brand-mark svg {
+  color: var(--msv-accent-contrast);
+}
+
+.orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* ---------------------------------------------------------------- controls */
+
+@layer components {
+  .btn-primary {
+    background: linear-gradient(180deg, var(--msv-accent-strong), var(--msv-accent));
+    color: var(--msv-accent-contrast);
+    box-shadow: 0 12px 26px -16px color-mix(in srgb, var(--msv-accent) 75%, transparent);
+    transition: filter 150ms ease, transform 150ms ease;
+  }
+
+  .btn-primary:hover {
+    filter: brightness(1.06);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.995);
+  }
+
+  .msv-input {
+    width: 100%;
+    height: 2.5rem;
+    border-radius: 10px;
+    border: 1px solid var(--msv-line);
+    background: var(--msv-surface);
+    color: var(--msv-ice-200);
+    padding: 0 0.75rem;
+    outline: none;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  }
+
+  .msv-input::placeholder {
+    color: var(--msv-ice-600);
+  }
+
+  .msv-input:hover {
+    border-color: var(--msv-line-strong);
+  }
+
+  .msv-input:focus {
+    border-color: color-mix(in srgb, var(--msv-accent) 62%, transparent);
+    background: var(--msv-surface);
+    box-shadow: 0 0 0 3px var(--msv-accent-soft);
+  }
+
+  .msv-input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  textarea.msv-input {
+    height: auto;
+    min-height: 5.25rem;
+    padding: 0.625rem 0.75rem;
+    resize: vertical;
+    line-height: 1.6;
+  }
+
+  select.msv-input {
+    appearance: none;
+    padding-right: 2.25rem;
+    background-image: var(--msv-select-arrow);
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    cursor: pointer;
+  }
+
+  select.msv-input option {
+    background: var(--msv-surface);
+    color: var(--msv-ice-200);
+  }
+
+  .field-label {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--msv-ice-400);
+    margin-bottom: 0.375rem;
+  }
+
+  .field-required {
+    color: var(--msv-danger-text);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    height: 1.375rem;
+    padding: 0 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--msv-line);
+    background: var(--msv-tint);
+    color: var(--msv-ice-400);
+    font-size: 0.6875rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .chip-mint {
+    border-color: color-mix(in srgb, var(--msv-accent) 26%, transparent);
+    background: var(--msv-accent-soft);
+    color: var(--msv-accent-text);
+  }
+
+  .chip-danger {
+    border-color: color-mix(in srgb, #e11d48 30%, transparent);
+    background: color-mix(in srgb, #e11d48 9%, transparent);
+    color: var(--msv-danger-text);
+  }
+
+  .chip-amber {
+    border-color: color-mix(in srgb, #d97706 30%, transparent);
+    background: color-mix(in srgb, #d97706 9%, transparent);
+    color: var(--msv-warning-text);
+  }
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 2.375rem;
+    height: 1.375rem;
+    flex: none;
+    border-radius: 999px;
+    border: 1px solid var(--msv-line-strong);
+    background: var(--msv-tint-strong);
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .switch::after {
+    content: "";
+    position: absolute;
+    left: 0.1875rem;
+    top: 50%;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-top: -0.4375rem;
+    border-radius: 999px;
+    background: var(--msv-ice-500);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), background 180ms ease;
+  }
+
+  .switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .switch[data-on="true"] {
+    background: color-mix(in srgb, var(--msv-accent) 78%, var(--msv-surface));
+    border-color: transparent;
+    box-shadow: 0 0 0 3px var(--msv-accent-soft);
+  }
+
+  .switch[data-on="true"]::after {
+    transform: translateX(1rem);
+    background: #ffffff;
+  }
+
+  .dark .switch[data-on="true"]::after {
+    background: #061020;
+  }
+
+  .segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    border-radius: 9px;
+    border: 1px solid var(--msv-line);
+    background: var(--msv-tint);
+  }
+
+  .segmented button {
+    height: 1.625rem;
+    padding: 0 0.625rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: var(--msv-ice-500);
+    transition: color 150ms ease, background 150ms ease;
+  }
+
+  .segmented button:hover {
+    color: var(--msv-ice-300);
+  }
+
+  .segmented button[data-active="true"] {
+    color: var(--msv-accent-text);
+    background: var(--msv-accent-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--msv-accent) 18%, transparent);
+  }
+
+  /* ---------------------------------------------------------------- table */
+
+  .msv-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Readable monospace for list data; the choice lives in Settings. */
+  html[data-table-font='mono'] .msv-table td {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+  }
+
+  .msv-table tbody tr[data-active="true"] {
+    background: color-mix(in srgb, var(--msv-accent) 15%, transparent);
+  }
+
+  .msv-table tbody tr[data-active="true"]:hover {
+    background: color-mix(in srgb, var(--msv-accent) 20%, transparent);
+  }
+
+  /* Custom checkbox: the native one looked crude next to the rest of the UI. */
+  .msv-check {
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
+    vertical-align: middle;
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 0.3125rem;
+    border: 1px solid var(--msv-line-strong);
+    background: var(--msv-surface);
+    cursor: pointer;
+    transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  .msv-check:hover {
+    border-color: color-mix(in srgb, var(--msv-accent) 55%, var(--msv-line-strong));
+  }
+
+  .msv-check:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--msv-accent-soft);
+  }
+
+  .msv-check:checked,
+  .msv-check:indeterminate {
+    background: var(--msv-accent);
+    border-color: transparent;
+  }
+
+  .msv-check:checked::after {
+    content: "";
+    width: 0.25rem;
+    height: 0.5rem;
+    margin-top: -0.0625rem;
+    border: solid var(--msv-accent-contrast);
+    border-width: 0 0.125rem 0.125rem 0;
+    transform: rotate(45deg);
+  }
+
+  .msv-check:indeterminate::after {
+    content: "";
+    width: 0.5rem;
+    height: 0.125rem;
+    border-radius: 1px;
+    background: var(--msv-accent-contrast);
+  }
+
+  .msv-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: 2.375rem;
+    padding: 0 0.75rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--msv-ice-500);
+    background: var(--msv-table-head);
+    border-bottom: 1px solid var(--msv-line);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .msv-table thead th:first-child {
+    padding-left: 1.125rem;
+  }
+
+  .msv-table tbody tr {
+    transition: background 140ms ease;
+  }
+
+  .msv-table tbody tr:hover {
+    background: var(--msv-accent-soft);
+  }
+
+  .msv-table tbody tr[data-selected="true"] {
+    background: color-mix(in srgb, var(--msv-accent) 12%, transparent);
+  }
+
+  .msv-table td {
+    height: 3rem;
+    padding: 0 0.75rem;
+    border-bottom: 1px solid var(--msv-line);
+    vertical-align: middle;
+    color: var(--msv-ice-300);
+  }
+
+  .msv-table td:first-child {
+    padding-left: 1.125rem;
+  }
+
+  /* Selection column: declared after the :first-child padding rules above so
+     the checkbox is centred in both axes instead of hugging the left edge. */
+  .msv-table thead th.col-check,
+  .msv-table tbody td.col-check {
+    padding: 0;
+    text-align: center;
+    line-height: 0;
+  }
+
+  .msv-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .msv-table.compact td {
+    height: 2.375rem;
+  }
+
+  .row-actions {
+    opacity: 0.38;
+    transition: opacity 140ms ease;
+  }
+
+  tr:hover .row-actions,
+  tr:focus-within .row-actions {
+    opacity: 1;
+  }
+
+  .mask-dots {
+    letter-spacing: 0.14em;
+    color: var(--msv-ice-500);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .secret-shown {
+    animation: secret-in 180ms ease-out;
+  }
+
+  .secret-countdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0.0625rem;
+    background: linear-gradient(90deg, var(--msv-accent), transparent);
+    transform-origin: left;
+    animation: secret-countdown 20s linear forwards;
+  }
+
+  /* ---------------------------------------------------------------- tooltip */
+
+  .tip {
+    position: relative;
+  }
+
+  .tip::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 9px);
+    transform: translate(-50%, 4px);
+    z-index: 70;
+    padding: 0.3125rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--msv-ice-500) 20%, transparent);
+    background: var(--msv-tooltip-bg);
+    color: var(--msv-tooltip-fg);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+    transition: opacity 140ms ease, transform 140ms ease;
+  }
+
+  .tip:hover::after,
+  .tip:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  .tip-down::after {
+    top: calc(100% + 9px);
+    bottom: auto;
+    transform: translate(-50%, -4px);
+  }
+
+  .tip-down:hover::after,
+  .tip-down:focus-visible::after {
+    transform: translate(-50%, 0);
+  }
+
+  .tip-right::after {
+    left: auto;
+    right: 0;
+    transform: translate(0, 4px);
+  }
+
+  .tip-right:hover::after,
+  .tip-right:focus-visible::after {
+    transform: translate(0, 0);
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--msv-tint) 25%,
+      var(--msv-tint-strong) 37%,
+      var(--msv-tint) 63%
+    );
+    background-size: 840px 100%;
+    animation: shimmer 1.6s linear infinite;
+    border-radius: 6px;
+  }
+}
+
+/* ---------------------------------------------------------------- motion */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes secret-in {
+  from { opacity: 0; filter: blur(3px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+@keyframes secret-countdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -420px 0; }
+  100% { background-position: 420px 0; }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--msv-accent) 35%, transparent); }
+  70% { box-shadow: 0 0 0 10px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-fade-in { animation: fade-in 240ms ease-out both; }
+.animate-fade-up { animation: fade-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-scale-in { animation: scale-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-slide-in { animation: slide-in-right 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* Keep overlay panels readable: a light blur instead of a heavy frost. The
+   drawer ships a stronger default, so both share one override. */
+.modal__backdrop--blur,
+.drawer__backdrop--blur {
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+/* The drawer slid in over 250ms but left in 200ms, which reads as uneven. */
+.drawer__dialog {
+  --drawer-enter-duration: 240ms;
+  --drawer-exit-duration: 240ms;
+}
+
+.drawer__backdrop {
+  transition-duration: 240ms;
+}
+
+.drawer__backdrop[data-exiting='true'] {
+  transition-duration: 240ms;
+}
+
+/* Frozen column shadow separates pinned cells from the scrolling area. */
+.msv-table td[data-frozen='true'],
+.msv-table th[data-frozen='true'] {
+  background-clip: padding-box;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#eef3f9" />
+    <title>MedSafeVault · 医安密管平台</title>
+    <script>
+      ;(function () {
+        var root = document.documentElement
+        var theme = 'system'
+        try {
+          theme = localStorage.getItem('heroui-theme') || 'system'
+        } catch (error) {}
+        var dark =
+          theme === 'dark' ||
+          (theme !== 'light' &&
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches)
+        var resolved = dark ? 'dark' : 'light'
+        root.classList.add(resolved)
+        root.setAttribute('data-theme', resolved)
+        root.style.colorScheme = resolved
+
+        var locale = ''
+        try {
+          locale = localStorage.getItem('msv-locale') || ''
+        } catch (error) {}
+        if (locale !== 'zh' && locale !== 'en') {
+          var languages = navigator.languages && navigator.languages.length
+            ? navigator.languages
+            : [navigator.language || '']
+          locale = languages.some(function (lang) {
+            return String(lang).toLowerCase().indexOf('zh') === 0
+          })
+            ? 'zh'
+            : 'en'
+        }
+        root.setAttribute('lang', locale === 'zh' ? 'zh-CN' : 'en')
+        root.setAttribute('data-locale', locale)
+        document.title =
+          locale === 'zh' ? 'MedSafeVault · 医安密管平台' : 'MedSafeVault · Medical Password Vault'
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', dark ? '#090d13' : '#eef3f9')
+      })()
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #eef3f9;
+      }
+      html.dark,
+      html.dark body {
+        background: #090d13;
+      }
+      .boot-splash {
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        color: #5d6f85;
+        font: 13px/1.4 "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+        letter-spacing: 0.08em;
+      }
+      html.dark .boot-splash {
+        color: #8b9bad;
+      }
+      .boot-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 11px;
+        background: linear-gradient(145deg, #60a5fa, #1d4ed8);
+        box-shadow: 0 8px 24px -10px rgba(37, 99, 235, 0.75);
+        animation: boot-pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes boot-pulse {
+        50% {
+          opacity: 0.55;
+          transform: scale(0.94);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot-splash">
+        <div class="boot-mark"></div>
+        <span id="boot-label">MedSafeVault 正在启动…</span>
+      </div>
+    </div>
+    <script>
+      ;(function () {
+        var label = document.getElementById('boot-label')
+        if (label && document.documentElement.getAttribute('data-locale') === 'en') {
+          label.textContent = 'MedSafeVault is starting…'
+        }
+      })()
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

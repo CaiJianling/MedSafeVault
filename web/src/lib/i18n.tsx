@@ -1,0 +1,1011 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+
+export type Locale = 'zh' | 'en'
+
+const STORAGE_KEY = 'msv-locale'
+
+/**
+ * Chinese source text is the dictionary key. English values may contain a
+ * `single|plural` pair; the plural form is chosen from the `n` variable.
+ */
+const EN: Record<string, string> = {
+  // ---------------------------------------------------------------- common
+  '医安密管平台': 'Medical Password Vault',
+  '医安密管平台 · 本地桌面版': 'Medical password vault · Local desktop',
+  '取消': 'Cancel',
+  '确认': 'Confirm',
+  '关闭': 'Close',
+  '删除': 'Delete',
+  '恢复': 'Restore',
+  '刷新': 'Refresh',
+  '重试': 'Retry',
+  '复制': 'Copy',
+  '复制失败': 'Copy failed',
+  '无法写入剪贴板': 'Cannot write to the clipboard',
+  '请重试': 'Please try again',
+  '请稍后重试': 'Please try again later',
+  '操作失败': 'Operation failed',
+  '导出失败': 'Export failed',
+  '删除失败': 'Delete failed',
+  '恢复失败': 'Restore failed',
+  '重做失败': 'Redo failed',
+  '撤回失败': 'Undo failed',
+  '锁定失败': 'Lock failed',
+  '保存失败，请重试': 'Save failed. Please try again.',
+  '设置未保存': 'Settings not saved',
+  '生成失败': 'Generation failed',
+  '清空失败': 'Failed to empty',
+  '修改失败，请重试': 'Change failed. Please try again.',
+  '打开密码': 'Open password',
+  '打开密码已修改': 'Open password changed',
+  '打开密码已重设': 'Open password reset',
+  '新的打开密码至少需要 8 位': 'The new open password must be at least 8 characters',
+  '打开密码至少需要 8 位': 'The open password must be at least 8 characters',
+  '两次输入的密码不一致': 'The passwords do not match',
+  '两次输入的新密码不一致': 'The new passwords do not match',
+  '显示密码': 'Show password',
+  '隐藏密码': 'Hide password',
+  '正在保存…': 'Saving…',
+  '保存失败': 'Save failed',
+  '永久删除': 'Delete permanently',
+  '移入回收站': 'Move to recycle bin',
+  '数据目录': 'Data folder',
+  '数据库文件': 'Database file',
+  '数据库': 'Database',
+  '版本': 'Version',
+  '加密': 'Encryption',
+  '系统': 'System',
+  '页面': 'Pages',
+  '记录': 'Records',
+  '历史': 'History',
+  '历史快照': 'History snapshots',
+  '加密字段': 'Encrypted fields',
+  '回收站页面': 'Recycle pages',
+  '回收站记录': 'Recycle records',
+  '数据库大小': 'Database size',
+  '创建时间': 'Created',
+  '来源：{path}': 'Source: {path}',
+  '已加密': 'Encrypted',
+  '未设置': 'Not set',
+  '（空）': '(empty)',
+  '密码库': 'Vault',
+  '无字段级差异': 'No field-level differences',
+  '今天': 'Today',
+  '昨天': 'Yesterday',
+  '更早': 'Earlier',
+  '刚刚': 'just now',
+  '{n} 分钟前': '{n} min ago|{n} min ago',
+  '{n} 小时前': '{n} h ago|{n} h ago',
+  '{n} 天前': '{n} day ago|{n} days ago',
+  '{y} 年 {m} 月 {d} 日': '{mon} {d}, {y}',
+  '未填写': 'Not set',
+  '不锁定': 'Off',
+  '太弱': 'Too weak',
+  '较弱': 'Weak',
+  '一般': 'Fair',
+  '较强': 'Strong',
+  '很强': 'Very strong',
+  '关闭提示': 'Dismiss notification',
+  '输入 {text} 以确认': 'Type {text} to confirm',
+  '正在校验…': 'Verifying…',
+  '正在派生密钥…': 'Deriving key…',
+  '正在打开本地保险库…': 'Opening the local vault…',
+  '正在读取密码库状态…': 'Reading vault status…',
+  '正在解开页面与记录…': 'Unlocking pages and records…',
+
+  // ---------------------------------------------------------------- app
+  '无法打开密码库': 'Cannot open the vault',
+  '请确认通过 MedSafeVault.exe 启动，而不是直接打开网页文件。如果问题持续，请检查数据目录是否可写，或关闭杀毒软件的拦截后重试。':
+    'Launch MedSafeVault.exe instead of opening the web page directly. If the problem persists, make sure the data folder is writable and that your antivirus is not blocking the app.',
+  '重新加载': 'Reload',
+  '无法加载页面': 'Cannot load pages',
+  '本地服务初始化失败': 'The local service failed to start',
+  '本地服务未就绪，请重新启动应用。': 'The local service is not ready. Restart the app.',
+  '无法连接 MedSafeVault 本地服务，请关闭应用后重新启动。':
+    'Cannot reach the MedSafeVault local service. Close the app and start it again.',
+  '操作已撤回': 'Change undone',
+  '操作已恢复': 'Change restored',
+  '无法加载记录': 'Cannot load records',
+  '无法加载修改历史': 'Cannot load change history',
+  '无法加载回收站': 'Cannot load the recycle bin',
+
+  // ---------------------------------------------------------------- header
+  '自动锁定已关闭': 'Auto-lock is off',
+  '不自动锁定': 'No auto-lock',
+  '无操作 {n} 分钟后自动锁定 · 点击调整': 'Auto-locks after {n} min idle · click to adjust',
+  '密钥仅在本机内存': 'Keys stay in local memory',
+  '撤回：{title}': 'Undo: {title}',
+  '没有可撤回的操作': 'Nothing to undo',
+  '撤回': 'Undo',
+  '恢复：{title}': 'Redo: {title}',
+  '没有可恢复的操作': 'Nothing to redo',
+  '修改历史': 'History',
+  '修改历史与撤回': 'Changes and undo',
+  '回收站': 'Recycle bin',
+  '设置': 'Settings',
+  '锁定': 'Lock',
+  '主题': 'Theme',
+  '跟随系统': 'System',
+  '亮色': 'Light',
+  '暗色': 'Dark',
+  '语言': 'Language',
+  '切换主题': 'Switch theme',
+  '切换语言': 'Switch language',
+  '中文': '中文',
+  'English': 'English',
+  '简体中文': 'Simplified Chinese',
+  '{n} 个': '{n}',
+  '{n} 条': '{n}',
+
+  // ---------------------------------------------------------------- tabs
+  '密码库页面': 'Vault pages',
+  '{n} 列已隐藏': '{n} column hidden|{n} columns hidden',
+  '新建页面': 'New page',
+
+  // ---------------------------------------------------------------- records
+  '删除这条记录？': 'Delete this record?',
+  '「{name}」会被移入回收站，可随时恢复。':
+    '"{name}" will move to the recycle bin and can be restored anytime.',
+  '记录已移入回收站': 'Record moved to the recycle bin',
+  '「{name}」可在回收站中恢复': '"{name}" can be restored from the recycle bin',
+  '连接已启动': 'Connection launched',
+  '无法连接': 'Cannot connect',
+  '请检查地址与客户端配置': 'Check the address and client configuration',
+  '无法读取文件': 'Cannot read the file',
+  '请检查 Excel 格式': 'Check the Excel format',
+  '导出完成': 'Export complete',
+  '{n} 条记录已写入\n{path}': '{n} record written\n{path}|{n} records written\n{path}',
+  '请关闭占用中的文件后重试': 'Close the file in use and try again',
+  '导入模板已生成': 'Import template generated',
+  '生成模板失败': 'Failed to generate the template',
+  '还没有可用页面': 'No pages yet',
+  '创建一个页面，为服务器、网络设备或业务系统建立自己的字段结构。':
+    'Create a page with your own fields for servers, network devices, or business systems.',
+  '暂无页面说明': 'No page description',
+  '{n} 条记录': '{n} record|{n} records',
+  '{n} 个加密字段': '{n} encrypted field|{n} encrypted fields',
+  '更新于 {time}': 'Updated {time}',
+  '新增记录': 'Add record',
+  '导入与导出': 'Import & export',
+  '正在选择文件…': 'Choosing file…',
+  '从 Excel / CSV 导入': 'Import from Excel / CSV',
+  '正在导出…': 'Exporting…',
+  '导出当前页 Excel': 'Export this page',
+  '下载导入模板': 'Download import template',
+  '页面设置': 'Page settings',
+  '页面设置与列配置': 'Page settings and columns',
+  '刷新记录': 'Refresh records',
+  '搜索名称、地址、账号、备注…': 'Search name, address, account, notes…',
+  '清除搜索': 'Clear search',
+  '找到 {n} 条匹配记录': '{n} matching record|{n} matching records',
+  '共 {n} 条 · 每页 {size} 条': '{n} total · {size} per page|{n} total · {size} per page',
+  '排序：{label}': 'Sort: {label}',
+  '双击行可编辑': 'Double-click a row to edit',
+  '没有找到「{q}」': 'No results for "{q}"',
+  '这个页面还没有记录': 'This page has no records yet',
+  '搜索会匹配所有字段，包括已加密的用户名与密码。试试更短的关键词。':
+    'Search matches every field, including encrypted usernames and passwords. Try a shorter keyword.',
+  '手动添加第一条记录，或从现有 Excel 表格批量导入。密码类字段会自动加密。':
+    'Add your first record manually or import an existing spreadsheet. Secret fields are encrypted automatically.',
+  '导入 Excel': 'Import Excel',
+  '暂无记录': 'No records',
+  '每页': 'Per page',
+  '条': '',
+  '上一页': 'Previous page',
+  '下一页': 'Next page',
+  '排序：{label} {dir}': 'Sort: {label} {dir}',
+
+  // ---------------------------------------------------------------- table
+  '操作': 'Actions',
+  '加密字段提示': 'Encrypted field',
+  '打开连接（RDP / SecureCRT / 浏览器）': 'Open connection (RDP / SecureCRT / browser)',
+  '编辑记录': 'Edit record',
+  '复制{label}': 'Copy {label}',
+  '已复制{label}': '{label} copied',
+  '已复制': 'Copied',
+  '连接': 'Connect',
+  '编辑': 'Edit',
+
+  // ---------------------------------------------------------------- secret cell
+  '无法查看': 'Cannot reveal',
+  '解密失败，请重试': 'Decryption failed. Please try again.',
+  '{label}已复制': '{label} copied',
+  '剪贴板将在 {n} 秒后自动清空': 'Clipboard clears in {n}s',
+  '密码已隐藏': 'Password hidden',
+  '查看密码': 'Show password',
+  '查看密码（20 秒后自动隐藏）': 'Show password (auto-hides in 20s)',
+  '复制密码': 'Copy password',
+  '复制（30 秒后自动清空剪贴板）': 'Copy (clears the clipboard in 30s)',
+
+  // ---------------------------------------------------------------- settings
+  '常规': 'General',
+  '安全': 'Security',
+  '数据': 'Data',
+  '关于': 'About',
+  '所有设置即时保存。安全与数据操作只影响这台电脑上的本地密码库。':
+    'All settings save instantly. Security and data actions only affect the local vault on this computer.',
+  'MedSafeVault · 本地加密': 'MedSafeVault · Local encryption',
+  '自动锁定': 'Auto-lock',
+  '计时从最后一次键鼠操作开始；锁定时会立即清除内存中的数据密钥。':
+    'Timing starts from the last input. Locking immediately clears the in-memory data key.',
+  '无操作后自动锁定': 'Auto-lock when idle',
+  '建议在信息科共用电脑上设为 3–5 分钟；设为「不自动锁定」仅在专用终端上使用。':
+    '3–5 minutes is recommended on shared computers; use "No auto-lock" only on a dedicated terminal.',
+  '{n} 分钟': '{n} min',
+  '显示与隐私': 'Display & privacy',
+  '这里是全局默认值；单个页面中标记为「掩码」的列始终隐藏。':
+    'Global defaults. Columns marked "Masked" in a page are always hidden.',
+  '在表格中隐藏用户名': 'Hide usernames in the table',
+  '用户名仍会加密存储，仅默认显示为圆点。':
+    'Usernames remain encrypted; only the display is masked.',
+  '隐藏地址类字段': 'Hide address fields',
+  '服务器地址、管理地址与带外地址默认以圆点显示。':
+    'Server, management, and out-of-band addresses are masked by default.',
+  '紧凑行高': 'Compact rows',
+  '每行高度从 48px 缩小到 38px，一屏显示更多记录。':
+    'Row height shrinks from 48px to 38px to fit more records.',
+  '远程连接': 'Remote connections',
+  '仅用于 SSH / Telnet 终端；Windows 服务器会自动使用 mstsc，网页地址使用默认浏览器。':
+    'Applies to SSH / Telnet terminals. Windows servers use mstsc; web addresses use the default browser.',
+  'SecureCRT 路径': 'SecureCRT path',
+  '未配置，将尝试常见安装位置': 'Not configured; common install locations will be tried',
+  '选择程序': 'Choose app',
+  'SecureCRT 路径已更新': 'SecureCRT path updated',
+  '无法选择程序': 'Cannot choose the app',
+  '修改打开密码': 'Change open password',
+  '只重新包裹数据密钥，不会重写数据库中的每条密文，因此修改很快。':
+    'Only the data key is rewrapped, so the change is fast and existing ciphertext stays untouched.',
+  '当前密码': 'Current password',
+  '新密码': 'New password',
+  '确认新密码': 'Confirm new password',
+  '· 强度 {label}': '· Strength: {label}',
+  '更新密码': 'Update password',
+  '请输入当前打开密码': 'Enter the current open password',
+  '数据密钥已用新密码重新包裹，请妥善保管新密码':
+    'The data key was rewrapped with the new password. Keep it safe.',
+  '恢复密钥': 'Recovery key',
+  '恢复密钥可以在忘记打开密码时重设密码。它不依赖旧密码，请离线保存。':
+    'A recovery key resets a forgotten password without the old one. Keep it offline.',
+  '重新生成': 'Regenerate',
+  '已启用': 'Enabled',
+  '未启用': 'Disabled',
+  '第 {n} 代': 'Generation {n}',
+  '创建于 {date}': 'Created {date}',
+  '重新生成会使所有旧的恢复密钥文件立即失效。生成后请立刻保存新的 .msvkey 文件，并删除旧文件以免混淆。':
+    'Regenerating invalidates every old recovery file. Save the new .msvkey immediately and delete the old one to avoid confusion.',
+  '安全边界': 'Security boundary',
+  '这些机制共同保护数据库文件本身。': 'These layers protect the database file itself.',
+  '字段级 AES-256-GCM': 'Field-level AES-256-GCM',
+  '每个加密字段独立密文，AAD 绑定记录与字段，防篡改与拼接。':
+    'Each field is encrypted separately; AAD binds record and field to prevent tampering and splicing.',
+  '随机数据密钥': 'Random data key',
+  'DEK 只存在于解锁后的内存中，磁盘上仅有被主密码包裹的版本。':
+    'The DEK exists only in memory after unlock; the disk holds only the wrapped copy.',
+  '超时或手动锁定会清除内存密钥，后续操作需要重新输入打开密码。':
+    'Timeout or manual lock wipes in-memory keys; further use requires the open password.',
+  '恢复密钥独立包裹': 'Independent recovery wrapping',
+  '恢复码经 PBKDF2 派生另一把 KEK，同样只包裹 DEK，不保存明文。':
+    'The recovery code derives a separate KEK that wraps only the DEK. No plaintext is stored.',
+  '加密备份': 'Encrypted backup',
+  '导出包含页面、记录与历史快照的完整备份。备份文件本身仍由打开密码保护。':
+    'Export pages, records, and history snapshots. The backup stays protected by the open password.',
+  '导出完整备份': 'Export full backup',
+  '从备份恢复': 'Restore from backup',
+  '打开数据目录': 'Open data folder',
+  '建议在每次批量导入、修改页面结构或升级版本前导出一次，并保存到离线介质。':
+    'Export before bulk imports, page changes, or upgrades, and keep the file offline.',
+  '确认恢复备份': 'Confirm backup restore',
+  '恢复会用备份内容替换当前密码库。恢复前会自动生成一份当前数据的加密备份。':
+    'Restoring replaces the vault with the backup. An encrypted backup of the current data is created first.',
+  '这会覆盖当前所有页面、记录与历史': 'This overwrites all pages, records, and history',
+  '备份的打开密码': 'Backup open password',
+  '输入导出该备份时使用的打开密码': 'Enter the password used when exporting this backup',
+  '覆盖并恢复': 'Overwrite & restore',
+  '本地存储': 'Local storage',
+  '密码库只保存在本机，不会同步到任何服务器。':
+    'The vault lives only on this computer and never syncs to a server.',
+  '路径已复制': 'Path copied',
+  '密码库已锁定，解锁后可查看数据统计。':
+    'The vault is locked. Unlock it to view data statistics.',
+  '运行环境': 'Runtime',
+  '用于排查兼容性问题，可复制后反馈。':
+    'For compatibility troubleshooting; copy and share when reporting an issue.',
+  '单文件桌面应用 · 数据不离开本机':
+    'Single-file desktop app · Data never leaves this machine',
+  '数据库 {size}': 'Database {size}',
+  '重新生成恢复密钥？': 'Regenerate the recovery key?',
+  '新的恢复密钥生成后，之前保存的所有恢复密钥文件与恢复码会立即失效。请确认你仍能访问当前密码库，并在生成后立即保存新文件。':
+    'A new recovery key invalidates all saved recovery files and codes immediately. Make sure you can still access this vault and save the new file right away.',
+  '生成': 'Generate',
+  '恢复密钥已更新': 'Recovery key updated',
+  '旧的恢复密钥文件已失效': 'Old recovery key files are no longer valid',
+  '加密备份已导出': 'Encrypted backup exported',
+  '{path}\n包含 {pages} 个页面、{records} 条记录':
+    '{path}\nContains {pages} page and {records} records|{path}\nContains {pages} pages and {records} records',
+  '无法读取备份': 'Cannot read the backup',
+  '文件可能已损坏': 'The file may be corrupted',
+  '请输入备份的打开密码': 'Enter the backup open password',
+  '备份已恢复': 'Backup restored',
+  '恢复前的数据已自动备份至：\n{path}': 'Current data was backed up to:\n{path}',
+  '密码库已替换为备份内容': 'The vault was replaced with the backup',
+  '外观': 'Appearance',
+  '主题模式': 'Theme',
+  '跟随系统设置，或在亮色与暗色之间手动切换。选择会保存在本机，下次启动自动应用。':
+    'Follow the system setting or choose light or dark manually. Your choice is saved locally and applied next time.',
+  '界面语言': 'Interface language',
+  '首次启动跟随系统语言；切换后会立即生效并保存在本机。':
+    'The first launch follows the system language. Changes apply instantly and are saved locally.',
+
+  // ---------------------------------------------------------------- page dialog
+  '文本': 'Text',
+  '密码': 'Password',
+  '数字': 'Number',
+  '下拉选项': 'Select',
+  '多行文本': 'Long text',
+  '日期': 'Date',
+  '链接': 'Link',
+  '下拉': 'Select',
+  '多行': 'Long',
+  '页面至少需要保留一列': 'A page needs at least one column',
+  '页面至少需要一列': 'A page needs at least one column',
+  '请填写页面名称': 'Enter a page name',
+  '页面名称不能超过 24 个字符': 'The page name cannot exceed 24 characters',
+  '列名称不能为空': 'Column name cannot be empty',
+  '列名称「{label}」不能超过 24 个字符':
+    'Column name "{label}" cannot exceed 24 characters',
+  '列名称「{label}」重复': 'Duplicate column name "{label}"',
+  '页面配置已保存': 'Page settings saved',
+  '「{name}」· {n} 列': '"{name}" · {n} column|"{name}" · {n} columns',
+  '保存页面失败': 'Failed to save the page',
+  '删除页面「{name}」？': 'Delete page "{name}"?',
+  '页面与其记录会一起移入回收站，不会立即销毁。你可以在侧边栏的「回收站」中恢复页面及其记录。':
+    'The page and its records move to the recycle bin; nothing is destroyed. Restore them from the recycle bin anytime.',
+  '页面已移入回收站': 'Page moved to the recycle bin',
+  '页面设置 · {name}': 'Page settings · {name}',
+  '修改名称、图标与列配置。列结构的改动会记录到修改历史。':
+    'Edit the name, icon, and columns. Column changes are recorded in history.',
+  '从模板开始，或完全自定义列。列至少需要一列，保存后仍可继续调整。':
+    'Start from a template or build your own columns. At least one column is required; you can adjust it later.',
+  '删除页面': 'Delete page',
+  '页面创建后可在「页面设置」中继续调整':
+    'You can refine it later in Page settings',
+  '{n} 列 · {n} 个加密字段': '{n} columns · {n} encrypted fields',
+  '保存页面': 'Save page',
+  '创建页面': 'Create page',
+  '起始模板': 'Starter template',
+  '{n}列': '{n} col|{n} cols',
+  '页面名称': 'Page name',
+  '例如：服务器、网络设备、检验系统': 'e.g. Servers, Network devices, LIS',
+  '页面说明': 'Page description',
+  '一句话说明这个页面管理什么': 'One line about what this page manages',
+  '页面图标': 'Page icon',
+  '列配置': 'Columns',
+  '勾选「加密」的列会以密文写入数据库；「掩码」列在表格中默认显示为圆点。':
+    'Encrypted columns are stored as ciphertext; masked columns show dots by default.',
+  '添加列': 'Add column',
+  '未命名列': 'Untitled column',
+  '掩码': 'Masked',
+  '必填': 'Required',
+  '隐藏': 'Hidden',
+  '上移': 'Move up',
+  '下移': 'Move down',
+  '删除列': 'Delete column',
+  '列名称': 'Column name',
+  '例如：服务器地址': 'e.g. Server address',
+  '字段类型': 'Field type',
+  '列宽 (px)': 'Width (px)',
+  '输入提示': 'Placeholder',
+  '例如：203.0.113.10': 'e.g. 192.168.0.10',
+  '下拉选项（用逗号分隔）': 'Options (comma separated)',
+  '物理机，虚拟机，云主机': 'Physical, Virtual, Cloud',
+  '加密存储': 'Encrypt at rest',
+  '表格中掩码': 'Mask in table',
+  '在表格中显示': 'Show in table',
+  '该列的值会独立加密，撤回历史中的旧值同样以密文保存。关闭加密后，之后保存的明文将不再加密。':
+    'Values in this column are encrypted independently, and history keeps ciphertext. After disabling encryption, newly saved values are stored in plaintext.',
+
+  // ---------------------------------------------------------------- setup
+  '至少 8 个字符': 'At least 8 characters',
+  '包含大写与小写字母': 'Upper and lower case letters',
+  '包含数字': 'Includes a number',
+  '包含符号（推荐）': 'Includes a symbol (recommended)',
+  '初始化失败，请重试': 'Initialization failed. Please try again.',
+  'FIRST RUN · 创建本机保险库': 'FIRST RUN · Create this vault',
+  '一条密码，': 'One password,',
+  '守住整座': 'guarding the hospital’s',
+  '医院的信息底账': 'entire information ledger',
+  '。': '.',
+  '打开密码只用于在本机解锁，不会上传或写入任何服务器。密码库会生成一把随机数据密钥，所有账号、密码与修改历史都以它加密。':
+    'The open password only unlocks this device and is never uploaded. A random data key encrypts every account, password, and history entry.',
+  '字段级加密与完整性校验': 'Field-level encryption and integrity checks',
+  '主密码仅用于包裹数据密钥': 'The master password only wraps the data key',
+  '一次性恢复密钥': 'One-time recovery key',
+  '忘记密码也能强制重设': 'Force a reset if the password is lost',
+  '离开工位自动清除内存密钥': 'Clears memory keys when you step away',
+  '数据目录：%APPDATA%\\MedSafeVault': 'Data folder: %APPDATA%\\MedSafeVault',
+  '设置密码 → 保存密钥': 'Set password → Save key',
+  '设置打开密码': 'Set the open password',
+  '每次启动 MedSafeVault 时都需要输入它。密码不会被保存，也无法被找回——请务必记牢。':
+    'Required every time MedSafeVault starts. It is never stored and cannot be recovered—commit it to memory.',
+  '至少 8 位，建议 12 位以上': 'At least 8 characters; 12+ recommended',
+  '确认密码': 'Confirm password',
+  '再次输入打开密码': 'Re-enter the open password',
+  '创建密码库': 'Create vault',
+  '密钥派生会在本机进行 600,000 次 PBKDF2 迭代，创建过程可能需要几秒钟。当前强度：{label}':
+    'Key derivation runs 600,000 local PBKDF2 iterations and may take a few seconds. Current strength: {label}',
+  'MedSafeVault v{version} · 纯本地加密存储':
+    'MedSafeVault v{version} · Fully local encrypted storage',
+  '退出': 'Quit',
+
+  // ---------------------------------------------------------------- lock
+  '字段级加密': 'Field-level encryption',
+  'AES-256-GCM 独立密钥包装': 'Independent AES-256-GCM key wrapping',
+  '纯本地存储': 'Fully local storage',
+  '数据不离开这台电脑': 'Data never leaves this computer',
+  '忘记密码也能安全找回': 'Recover safely if the password is lost',
+  '变更可撤回': 'Undoable changes',
+  '每次修改都有加密记录': 'Every change has an encrypted log',
+  '请输入打开密码': 'Enter the open password',
+  '解锁失败，请重试': 'Unlock failed. Please try again.',
+  '把医院的钥匙，': 'The hospital’s keys,',
+  '锁进一座': 'locked in a',
+  '看得见的保险库': 'vault you can see',
+  '服务器、网络设备、数据库与应用账号集中管理。主密码解锁、字段级加密、恢复密钥与可撤回的修改历史，为信息科日常运维留下一份可靠底账。':
+    'Manage servers, network devices, databases, and app accounts in one place—master-password unlock, field-level encryption, recovery keys, and undoable history for everyday IT operations.',
+  '数据仅保存在本机 · 不上传云端': 'Stored only on this machine · Never uploaded',
+  '解锁保险库': 'Unlock vault',
+  '输入打开密码以继续。密码只在本机校验，不会被保存。':
+    'Enter the open password to continue. It is verified locally and never stored.',
+  '超过 {n} 分钟无操作，已自动锁定。请重新输入打开密码。':
+    'Locked automatically after {n} minutes idle. Enter the open password again.',
+  '保险库已手动锁定，加密密钥已从内存清除。':
+    'The vault was locked manually. Encryption keys were cleared from memory.',
+  '输入打开密码': 'Enter the open password',
+  '解锁': 'Unlock',
+  '忘记密码': 'Forgot password?',
+  '使用恢复密钥': 'Use a recovery key',
+  '导入 .msvkey 文件或输入恢复码，重设打开密码':
+    'Import a .msvkey file or enter a recovery code to reset the password',
+
+  // ---------------------------------------------------------------- history
+  '新增': 'Added',
+  '修改': 'Edited',
+  '页面已创建': 'Page created',
+  '已恢复': 'Restored',
+  '页面已删除': 'Page deleted',
+  '恢复页面': 'Page restored',
+  '页面配置': 'Page settings',
+  'Excel 导入': 'Excel import',
+  '恢复备份': 'Backup restored',
+  '安全设置': 'Security change',
+  '状态': 'Status',
+  '导入': 'Import',
+  '无法查看历史值': 'Cannot reveal the history value',
+  '解密失败': 'Decryption failed',
+  '隐藏历史密码': 'Hide history secret',
+  '查看历史密码': 'Reveal history secret',
+  '所有增删改都以加密快照保存 · 共 {n} 条':
+    'Every change is stored as an encrypted snapshot · {n} total',
+  '撤回最近': 'Undo latest',
+  '重做': 'Redo',
+  '最近：{title}': 'Latest: {title}',
+  '历史记录不会被静默删除': 'History is never silently deleted',
+  '搜索标题、页面…': 'Search title, page…',
+  '全部': 'All',
+  '没有匹配的修改': 'No matching changes',
+  '还没有修改记录': 'No changes yet',
+  '换一个关键词，或切换到「全部」查看。': 'Try another keyword or switch to All.',
+  '新增、编辑、删除、导入与页面配置变更都会记录在这里，密码类字段以密文保存。':
+    'Creates, edits, deletes, imports, and page changes are recorded here; secret fields stay encrypted.',
+  '已撤回': 'Undone',
+  '已失效': 'Discarded',
+  '撤回这次修改': 'Undo this change',
+  '加载更早的记录（还有 {n} 条）':
+    'Load earlier changes ({n} left)|Load earlier changes ({n} left)',
+  '刷新修改历史': 'Refresh history',
+
+  // ---------------------------------------------------------------- recycle
+  '页面已恢复': 'Page restored',
+  '「{name}」及其记录已回到密码库': '"{name}" and its records are back in the vault',
+  '记录已恢复': 'Record restored',
+  '「{title}」已回到原页面': '"{title}" is back on its page',
+  '永久删除？': 'Delete permanently?',
+  '「{name}」将被永久销毁，数据库中的密文与历史快照都会清理，无法恢复。\n建议先确认已导出备份。':
+    '"{name}" will be destroyed permanently together with its ciphertext and history snapshots. This cannot be undone.\nExport a backup first.',
+  '清空回收站？': 'Empty the recycle bin?',
+  '将永久删除 {pages} 个页面与 {records} 条记录，包含它们的所有加密数据与历史快照，此操作无法撤回。':
+    'This permanently deletes {pages} pages and {records} records, including all encrypted data and history snapshots. It cannot be undone.',
+  '清空回收站': 'Empty recycle bin',
+  '清空': 'Empty',
+  '已永久删除': 'Permanently deleted',
+  '「{name}」已从回收站清除': '"{name}" was removed from the recycle bin',
+  '回收站已清空': 'Recycle bin emptied',
+  '永久删除 {pages} 个页面、{records} 条记录':
+    'Permanently deleted {pages} pages and {records} records',
+  '删除的页面与记录会保留在这里，数据仍以密文存储，可随时恢复。':
+    'Deleted pages and records stay here, still encrypted, and can be restored anytime.',
+  '{pages} 个页面 · {records} 条记录': '{pages} pages · {records} records',
+  '恢复后可继续使用原加密数据':
+    'Restored items keep their original encrypted data',
+  '回收站里没有页面': 'No pages in the recycle bin',
+  '回收站里没有记录': 'No records in the recycle bin',
+  '删除页面时会连同其记录一起移入这里，可在确认无误后永久清空。':
+    'Deleting a page moves it and its records here; empty it once you are sure.',
+  '删除单条记录后会出现在这里，恢复后回到原页面。':
+    'Deleted records appear here and return to their page when restored.',
+  '无页面说明': 'No description',
+  '删除于 {date}': 'Deleted {date}',
+  '永久删除页面': 'Delete page permanently',
+  '永久删除记录': 'Delete record permanently',
+  '无可见预览字段': 'No preview fields',
+  '所属页面也在回收站中': 'The parent page is also in the recycle bin',
+  '请先恢复所属页面': 'Restore the parent page first',
+  '恢复记录': 'Restore record',
+  '回收站不会自动清理。永久删除会同时移除相关历史快照；若需要留档，请先导出加密备份。':
+    'The recycle bin is never cleaned automatically. Permanent deletion also removes history snapshots; export a backup first if you need a record.',
+
+  // ---------------------------------------------------------------- record dialog
+  '无法读取记录': 'Cannot read the record',
+  '已生成 20 位强密码': 'Generated a 20-character password',
+  '保存后将以 AES-256-GCM 加密': 'It will be encrypted with AES-256-GCM when saved',
+  '请填写{label}': '{label} is required',
+  '记录已更新': 'Record updated',
+  '记录已添加': 'Record added',
+  '修改已写入加密历史，可随时撤回':
+    'The change is in encrypted history and can be undone',
+  '新增{name}记录': 'New {name} record',
+  '创建于 {created} · 最近更新 {updated}': 'Created {created} · Updated {updated}',
+  '{name} · {n} 个字段，{m} 个加密字段':
+    '{name} · {n} fields, {m} encrypted',
+  '密码类字段仅在保存时加密，内存密钥锁定后自动清除':
+    'Secret fields are encrypted on save; memory keys are cleared when locked',
+  '保存修改': 'Save changes',
+  '添加记录': 'Add record',
+  '未选择': 'Not selected',
+  '输入或生成密码': 'Enter or generate a password',
+  '生成随机密码': 'Generate random password',
+  '生成 20 位随机强密码': 'Generate a 20-character strong password',
+  '输入{label}': 'Enter {label}',
+  '当前页面包含 {n} 个加密字段：用户名与密码都会以独立密文写入数据库。忘记打开密码时，需要恢复密钥才能再次解密。':
+    'This page has {n} encrypted fields; usernames and passwords are stored as separate ciphertexts. A recovery key is required if the open password is lost.',
+
+  // ---------------------------------------------------------------- excel
+  '导入完成': 'Import complete',
+  '已写入 {n} 条记录，可在修改历史中撤回':
+    '{n} record written; undo it from history|{n} records written; undo them from history',
+  '导入失败，请检查文件格式': 'Import failed. Check the file format.',
+  '导入 Excel / CSV': 'Import Excel / CSV',
+  '{file} · 预览将写入「{page}」': '{file} · Preview will be written to "{page}"',
+  '密码类字段会在导入时加密，历史中可整体撤回':
+    'Secret fields are encrypted on import; the whole batch can be undone',
+  '导入 {n} 条记录': 'Import {n} record|Import {n} records',
+  '数据行': 'Data rows',
+  '不含表头与空行': 'Excludes the header and empty rows',
+  '已匹配列': 'Matched columns',
+  '写入当前页面': 'Written to this page',
+  '未匹配表头': 'Unmatched headers',
+  '将被忽略': 'Will be ignored',
+  '列映射': 'Column mapping',
+  '以下表头没有对应列，导入时会被忽略：':
+    'These headers have no matching columns and will be ignored:',
+  '数据预览': 'Data preview',
+  '最多显示前 {n} 行': 'First {n} rows shown',
+  '文件中没有可预览的数据行': 'No previewable rows in the file',
+  '加密字段已隐藏': 'Encrypted field hidden',
+  '预览仅展示前 8 列，其余 {n} 列也会正常导入。':
+    'Preview shows the first 8 columns; the other {n} will still be imported.',
+  '导入不会自动去重。若表中已有相同记录，请先导出核对；导入完成后可使用顶部的撤回按钮整体撤销。':
+    'Imports are not deduplicated. Export first if the page may contain duplicates. Undo the whole batch from the header.',
+
+  // ---------------------------------------------------------------- recovery
+  '恢复密钥文件': 'Recovery key file',
+  '无法读取恢复密钥文件': 'Cannot read the recovery key file',
+  '请输入完整的恢复码': 'Enter the complete recovery code',
+  '恢复码校验失败': 'Recovery code verification failed',
+  '请使用新密码解锁密码库，并妥善保存恢复密钥':
+    'Unlock with the new password and keep the recovery key safe',
+  '重设密码失败，请重新导入恢复密钥':
+    'Reset failed. Import the recovery key again.',
+  '输入恢复码': 'Enter recovery code',
+  '重设打开密码': 'Reset open password',
+  '恢复密钥用于在忘记打开密码时重新获得访问权限。':
+    'A recovery key restores access when the open password is forgotten.',
+  '恢复码由 32 位字母与数字组成，不区分大小写。':
+    'The code has 32 letters and digits and is not case-sensitive.',
+  '输入一次新的打开密码。旧的打开密码将立即失效。':
+    'Set a new open password. The old one stops working immediately.',
+  '返回': 'Back',
+  '验证恢复码': 'Verify code',
+  '密码库 {id}': 'Vault {id}',
+  '恢复会话已建立': 'Recovery session established',
+  '重设并解锁': 'Reset & unlock',
+  '导入恢复密钥文件': 'Import recovery key file',
+  '选择首次初始化时保存的 .msvkey 文件，自动校验所属密码库':
+    'Choose the .msvkey file saved at setup; its vault is verified automatically',
+  '手动输入恢复码': 'Enter the code manually',
+  '从纸质密码本或离线备份中找回 32 位恢复码':
+    'Find the 32-character code in your paper book or offline backup',
+  '恢复密钥文件包含与主密钥等价的凭证。若它已丢失，且打开密码也忘记，密码库数据将无法解密。':
+    'The recovery file is equivalent to the master key. If it is lost and the password forgotten, the data cannot be decrypted.',
+  '恢复码': 'Recovery code',
+  '粘贴时会自动分组，连字符可省略':
+    'Groups are added automatically; hyphens are optional',
+  '恢复密钥已验证。请设置新的打开密码，数据本身无需重新加密。':
+    'Recovery key verified. Set a new open password; the data itself needs no re-encryption.',
+  '新的打开密码': 'New open password',
+  '再次输入新密码': 'Re-enter the new password',
+  '恢复密钥文件已保存': 'Recovery key file saved',
+  '无法保存恢复密钥文件': 'Cannot save the recovery key file',
+  '恢复码已复制': 'Recovery code copied',
+  '请粘贴到离线的密码本或加密笔记中':
+    'Paste it into an offline password book or encrypted note',
+  '请手动抄写恢复码': 'Copy the recovery code by hand',
+  '保存恢复密钥': 'Save the recovery key',
+  '密码库已创建。这是唯一一次完整展示恢复密钥的机会。':
+    'The vault is ready. This is the only time the full recovery key will be shown.',
+  '新的恢复密钥已生成，旧的恢复密钥文件与恢复码将立即失效。':
+    'A new recovery key was generated. Old files and codes stop working immediately.',
+  '再次保存 .msvkey': 'Save .msvkey again',
+  '保存 .msvkey 文件': 'Save .msvkey file',
+  '进入密码库': 'Enter vault',
+  '我已保存': "I've saved it",
+  '它等同于密码库的主钥匙': "It is equivalent to the vault's master key",
+  '请打印或保存到离线 U 盘，不要与数据库放在同一台电脑，也不要通过聊天工具发送。任何拿到恢复密钥的人都可以重设打开密码。':
+    'Print it or save it to an offline USB drive. Do not keep it on the same computer as the database or send it through chat. Anyone with it can reset the open password.',
+  'RECOVERY CODE · 第 {n} 代': 'RECOVERY CODE · Generation {n}',
+  '恢复码共 {n} 位，校验位已包含在末组':
+    '{n} characters total; the checksum is in the last group',
+  '复制恢复码': 'Copy code',
+  '已保存至 {path}': 'Saved to {path}',
+  '我已妥善保存恢复密钥，并理解：丢失打开密码且没有恢复密钥时，密码库无法恢复。':
+    'I have saved the recovery key and understand the vault cannot be recovered without it if the open password is lost.',
+
+  // ---------------------------------------------------------------- page icons
+  '服务器': 'Server',
+  '网络': 'Network',
+  '应用': 'App',
+  '云': 'Cloud',
+  '密钥': 'Key',
+  '通用': 'General',
+  '终端': 'Terminal',
+  '网站': 'Website',
+  '保险库': 'Vault',
+  '目录': 'Folder',
+  // ------------------------------------------- round C & D feedback
+  // ---------- accent palettes and font pickers
+  '主题配色': 'Accent colour',
+  '配色会同时适配亮色与暗色，所有色值都按对比度校准过。':
+    'Each palette is tuned for both light and dark, and every value was checked for contrast.',
+  '界面字体': 'Interface font',
+  '留空使用系统默认；列表来自本机已安装的字体。':
+    'Leave empty for the system default; the list comes from fonts installed on this machine.',
+  '读取系统字体': 'Read installed fonts',
+  '代码字体': 'Code font',
+  '用于列表中的端口、地址、账号与密码等等宽文本。':
+    'Used for monospaced text in the table: ports, addresses, accounts and passwords.',
+  '系统默认': 'System default',
+  '等宽默认': 'Monospace default',
+  '当前环境无法读取系统字体': 'This environment cannot list system fonts',
+  '已提供常用字体列表，可直接选择。': 'A list of common fonts is offered instead.',
+  '已读取 {n} 个系统字体': 'Read {n} system font|Read {n} system fonts',
+  '未获得字体读取权限': 'Font access was not granted',
+  '请在权限提示中允许后重试。': 'Allow the permission prompt and try again.',
+  '海蓝': 'Ocean blue',
+  '天青': 'Sky',
+  '湖青': 'Cyan',
+  '松绿': 'Pine green',
+  '翡翠': 'Emerald',
+  '紫罗兰': 'Violet',
+  '玫红': 'Rose',
+  '琥珀': 'Amber',
+  // ---------- backend generated titles and messages
+  '使用中': 'In use',
+  '修改页面「{from}」→「{to}」': 'Page renamed from {from} to {to}',
+  '新建页面「{name}」': 'Created page {name}',
+  '修改页面「{name}」': 'Updated page {name}',
+  '删除页面「{name}」': 'Moved page {name} to the recycle bin',
+  '彻底删除页面「{name}」及 {n} 条记录':
+    'Deleted page {name} and {n} record permanently|Deleted page {name} and {n} records permanently',
+  '恢复页面「{name}」': 'Restored page {name}',
+  '新增记录「{name}」': 'Added record {name}',
+  '修改记录「{name}」': 'Edited record {name}',
+  '删除记录「{name}」': 'Moved record {name} to the recycle bin',
+  '恢复记录「{name}」': 'Restored record {name}',
+  '彻底删除记录「{name}」': 'Deleted record {name} permanently',
+  '从 Excel 导入 {n} 条记录到「{name}」':
+    'Imported {n} record into {name} from Excel|Imported {n} records into {name} from Excel',
+  '清空回收站（{pages} 个页面，{records} 条记录）':
+    'Emptied the recycle bin ({pages} page, {records} record)|Emptied the recycle bin ({pages} pages, {records} records)',
+  '已撤回：{title}': 'Undone: {title}',
+  '已恢复：{title}': 'Redone: {title}',
+  '「{name}」不能为空': '{name} cannot be empty',
+  '列名称「{name}」重复': 'Column name {name} is duplicated',
+  '已启动 SecureCRT：{target}': 'SecureCRT started: {target}',
+  '已启动远程桌面：{target}': 'Remote desktop started: {target}',
+  '已在浏览器中打开 {address}': 'Opened {address} in the browser',
+  '{n} 列：{rest}': '{n} column: {rest}|{n} columns: {rest}',
+  '「{name}」已回到原页面': '"{name}" is back in its page',
+  '删除于 {time}': 'Deleted {time}',
+  '历史输入': 'Previous entries',
+  '取消冻结': 'Unfreeze',
+  '取消冻结（其右侧列会一并取消）': 'Unfreeze (columns to the right unfreeze too)',
+  '固定在表格左侧': 'Pin to the left side of the table',
+  '请先冻结左侧相邻的列': 'Freeze the column to its left first',
+  '密钥派生会在本机进行 600,000 次 PBKDF2 迭代，创建过程可能需要几秒钟。当前强度：':
+    'Key derivation runs 600,000 PBKDF2 iterations on this machine, so setup takes a few seconds. Current strength:',
+  '数据目录：{LOC}，按 Win+R 可直接打开': 'Data folder: {LOC} — press Win+R to open it',
+  '医院的信息底账。': 'the whole IT ledger of the hospital.',
+  '看得见的保险库。': 'a vault you can see.',
+  '医疗业务': 'Clinical systems',
+  '存储': 'Storage',
+  '工作站': 'Workstation',
+  '打印机': 'Printer',
+  '监控': 'Surveillance',
+  '账号': 'Accounts',
+  '网络设备': 'Network gear',
+  '应用系统': 'Applications',
+  '新页面': 'New page',
+  '其他账号': 'Other accounts',
+  '物理机、虚拟机与云主机': 'Physical, virtual and cloud servers',
+  '交换机、路由器与安全设备': 'Switches, routers and security appliances',
+  '业务系统与网站账号': 'Business systems and website accounts',
+  '数据库实例与连接账号': 'Database instances and connection accounts',
+  '从基础字段开始': 'Start from the basic fields',
+  '零散账号与密钥': 'Miscellaneous accounts and keys',
+  '跳至': 'Go to',
+  '页': 'page',
+  '共 {n} 页': '{n} page|{n} pages',
+  '跳转到第几页': 'Jump to page',
+  '{n} 列': '{n} column|{n} columns',
+  '密码字段 {n} 个': '{n} password field|{n} password fields',
+  '冻结列': 'Freeze column',
+  '打开连接': 'Open connection',
+  '{name} · {n} 个字段，{m} 个密码字段': '{name} · {n} fields, {m} password fields',
+  '{n} 个密码字段': '{n} password field|{n} password fields',
+  '{n} 条无法删除': '{n} could not be removed',
+  '{n} 条记录已移入回收站': '{n} record moved to the recycle bin|{n} records moved to the recycle bin',
+  '保存后将使用密码专用子密钥加密': 'Sealed with the dedicated password subkey once saved',
+  '全选本页': 'Select this page',
+  '全部字段已加密': 'All fields encrypted',
+  '冻结': 'Frozen',
+  '列表字体': 'List font',
+  '加密存储（AES-256-GCM）': 'Encrypted storage (AES-256-GCM)',
+  '取消选择': 'Deselect',
+  '在末尾添加列（共 {n} 列）': 'Add a column at the end ({n} columns)',
+  '已包含表头，可直接粘贴到 Excel': 'Header included, ready to paste into Excel',
+  '大': 'Large',
+  '密码列使用由数据密钥派生的独立子密钥与专用认证标签加密，撤回历史中的旧值同样以密文保存。':
+    'Password columns use a separate subkey derived from the data key with its own auth tag; older values in the undo history stay encrypted as well.',
+  '密码字段提示': 'Password column, sealed with its own subkey',
+  '小': 'Small',
+  '已复制 {n} 条记录': '{n} record copied|{n} records copied',
+  '已复制整行': 'Row copied',
+  '已选择 {n} 条': '{n} selected',
+  '强化加密': 'Hardened',
+  '强化加密（独立子密钥）': 'Hardened encryption (separate subkey)',
+  '所有字段都会以密文写入数据库，密码字段额外使用独立子密钥；「掩码」列默认显示为圆点；「冻结」列需从第一列开始依次冻结。':
+    'Every field is written to the database as ciphertext, and password columns get an extra subkey. Masked columns show dots, and freezing must start from the first column.',
+  '含密码': 'with secrets',
+  '整体缩放界面，投影或高分屏上可以选择更大的布局。':
+    'Scales the whole interface; choose a larger layout for projectors or high-DPI screens.',
+  '本页每个字段都以 AES-256-GCM 密文保存，认证标签绑定记录与字段，可防止篡改与拼接。忘记打开密码时需要恢复密钥才能解密。':
+    'Every field on this page is stored as AES-256-GCM ciphertext, with an auth tag bound to the record and column so values cannot be swapped. Recovering a forgotten open password also restores access to the data.',
+  '本页每个字段都以 AES-256-GCM 密文保存；其中 {n} 个密码字段额外使用由数据密钥派生的独立子密钥。忘记打开密码时需要恢复密钥才能解密。':
+    'Every field on this page is stored as AES-256-GCM ciphertext, and the {n} password columns add a separate subkey derived from the data key. Recovering a forgotten open password also restores access to the data.',
+  '标准': 'Standard',
+  '每个字段都以密文写入数据库，内存密钥锁定后自动清除':
+    'Every field is stored as ciphertext; the in-memory key is wiped when the vault locks',
+  '每页条数': 'Rows per page',
+  '清除选择': 'Clear selection',
+  '界面大小': 'Interface size',
+  '移入回收站 {n} 条记录？': 'Move {n} records to the recycle bin?',
+  '等宽': 'Monospace',
+  '等宽字体让端口、IP 与账号对齐，更易分辨 0/O 与 1/l。':
+    'Monospace keeps ports, addresses and accounts aligned and makes 0/O and 1/l easier to tell apart.',
+  '该列的值以 AES-256-GCM 密文保存，撤回历史中的旧值同样以密文保存。':
+    'Values in this column are sealed with AES-256-GCM, including the older values kept in the undo history.',
+  '选中的记录会一起移入回收站，可以逐条撤回或恢复。':
+    'The selected records move to the recycle bin together, and each one can still be undone or restored.',
+  '选择此记录': 'Select this record',
+  '选择记录': 'Select record',
+  '复制整行': 'Copy row',
+  '复制所选': 'Copy selection',
+}
+
+const EN_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]
+
+let currentLocale: Locale = 'zh'
+
+export function getLocale(): Locale {
+  return currentLocale
+}
+
+/** Translate a Chinese source string outside React (utils, errors, mock). */
+export function translate(
+  source: string,
+  vars?: Record<string, string | number>,
+): string {
+  let value = currentLocale === 'zh' ? source : EN[source]
+  if (value == null) return source
+  if (currentLocale !== 'zh' && value.includes('|')) {
+    const [one, many] = value.split('|')
+    const count = typeof vars?.n === 'number' ? vars.n : null
+    value = count === 1 ? one : (many ?? one)
+  }
+  if (vars) {
+    value = value.replace(/\{(\w+)\}/g, (match, name: string) => {
+      const replacement = vars[name]
+      if (replacement == null) return match
+      if (name === 'n' && currentLocale === 'en' && typeof replacement === 'number') {
+        return String(replacement)
+      }
+      return String(replacement)
+    })
+  }
+  return value
+}
+
+/**
+ * History titles, undo summaries and backend errors are produced in Chinese and
+ * older rows keep that text, so recognised shapes are rebuilt from a template
+ * here instead of being stored twice.
+ */
+const SERVER_PATTERNS: [RegExp, string][] = [
+  [/^修改页面「(?<from>[^」]*)」→「(?<to>[^」]*)」$/, '修改页面「{from}」→「{to}」'],
+  [/^新建页面「(?<name>[^」]*)」$/, '新建页面「{name}」'],
+  [/^修改页面「(?<name>[^」]*)」$/, '修改页面「{name}」'],
+  [/^删除页面「(?<name>[^」]*)」$/, '删除页面「{name}」'],
+  [
+    /^彻底删除页面「(?<name>[^」]*)」及 (?<n>\d+) 条记录$/,
+    '彻底删除页面「{name}」及 {n} 条记录',
+  ],
+  [/^恢复页面「(?<name>[^」]*)」$/, '恢复页面「{name}」'],
+  [/^新增记录「(?<name>[^」]*)」$/, '新增记录「{name}」'],
+  [/^修改记录「(?<name>[^」]*)」$/, '修改记录「{name}」'],
+  [/^删除记录「(?<name>[^」]*)」$/, '删除记录「{name}」'],
+  [/^恢复记录「(?<name>[^」]*)」$/, '恢复记录「{name}」'],
+  [/^彻底删除记录「(?<name>[^」]*)」$/, '彻底删除记录「{name}」'],
+  [
+    /^从 Excel 导入 (?<n>\d+) 条记录到「(?<name>[^」]*)」$/,
+    '从 Excel 导入 {n} 条记录到「{name}」',
+  ],
+  [
+    /^清空回收站（(?<pages>\d+) 个页面，(?<records>\d+) 条记录）$/,
+    '清空回收站（{pages} 个页面，{records} 条记录）',
+  ],
+  [/^已撤回：(?<title>.*)$/, '已撤回：{title}'],
+  [/^已恢复：(?<title>.*)$/, '已恢复：{title}'],
+  [/^「(?<name>[^」]*)」不能为空$/, '「{name}」不能为空'],
+  [/^列名称「(?<name>[^」]*)」重复$/, '列名称「{name}」重复'],
+  [/^已启动 SecureCRT：(?<target>.*)$/, '已启动 SecureCRT：{target}'],
+  [/^已启动远程桌面：(?<target>.*)$/, '已启动远程桌面：{target}'],
+  [/^已在浏览器中打开 (?<address>.*)$/, '已在浏览器中打开 {address}'],
+  [/^(?<n>\d+) 列：(?<rest>.*)$/, '{n} 列：{rest}'],
+  [/^(?<n>\d+) 条记录$/, '{n} 条记录'],
+]
+
+export function translateServerText(text: string | null | undefined): string {
+  if (!text) return ''
+  if (currentLocale === 'zh') return text
+  const exact = translate(text)
+  if (exact !== text) return exact
+  for (const [pattern, key] of SERVER_PATTERNS) {
+    const match = text.match(pattern)
+    if (!match?.groups) continue
+    const vars: Record<string, string> = {}
+    for (const [name, value] of Object.entries(match.groups)) {
+      vars[name] = typeof value === 'string' ? translateServerText(value) : ''
+    }
+    const translated = translate(key, vars)
+    if (translated !== key) return translated
+  }
+  return text
+}
+
+export function detectLocale(): Locale {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved === 'zh' || saved === 'en') return saved
+  } catch {
+    /* storage may be unavailable */
+  }
+  const languages =
+    typeof navigator !== 'undefined' && navigator.languages?.length
+      ? navigator.languages
+      : typeof navigator !== 'undefined' && navigator.language
+        ? [navigator.language]
+        : []
+  return languages.some((lang) => lang.toLowerCase().startsWith('zh')) ? 'zh' : 'en'
+}
+
+function applyDocumentLocale(locale: Locale) {
+  currentLocale = locale
+  try {
+    document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
+  } catch {
+    /* no document */
+  }
+}
+
+interface I18nValue {
+  locale: Locale
+  setLocale: (locale: Locale) => void
+  t: (source: string, vars?: Record<string, string | number>) => string
+}
+
+const I18nContext = createContext<I18nValue | null>(null)
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    const detected = detectLocale()
+    applyDocumentLocale(detected)
+    return detected
+  })
+
+  const setLocale = useCallback((next: Locale) => {
+    setLocaleState(next)
+    applyDocumentLocale(next)
+    try {
+      localStorage.setItem(STORAGE_KEY, next)
+    } catch {
+      /* storage may be unavailable */
+    }
+  }, [])
+
+  useEffect(() => {
+    applyDocumentLocale(locale)
+  }, [locale])
+
+  const t = useCallback(
+    (source: string, vars?: Record<string, string | number>) => translate(source, vars),
+    [locale],
+  )
+
+  const value = useMemo<I18nValue>(
+    () => ({ locale, setLocale, t }),
+    [locale, setLocale, t],
+  )
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+}
+
+export function useI18n(): I18nValue {
+  const context = useContext(I18nContext)
+  if (!context) throw new Error('useI18n must be used inside I18nProvider')
+  return context
+}
+
+export function formatMonthYear(date: Date): string {
+  if (currentLocale === 'zh') {
+    return `${date.getFullYear()} 年 ${date.getMonth() + 1} 月 ${date.getDate()} 日`
+  }
+  return `${EN_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
+}
+
+export function formatDayLabel(date: Date): string {
+  if (currentLocale === 'en') {
+    return `${EN_MONTHS[date.getMonth()]} ${date.getDate()}`
+  }
+  return `${date.getMonth() + 1} 月 ${date.getDate()} 日`
+}

@@ -1,0 +1,72 @@
+# MedSafeVault — 版本控制忽略清单
+# 约定：源码与小型输入资源入库；虚拟环境、构建产物、本地数据一律不入库。
+
+# ---------------------------------------------------------- Python 环境
+.venv/
+venv/
+env/
+
+# ---------------------------------------------------------- Python 产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------------------------------------------------------- 打包产物
+# build/ 是 PyInstaller 中间文件，dist/MedSafeVault.exe 由 tools/build_exe.py
+# 随时可重建（体积 24 MB，发布时走内部文件服务器或 Release 附件，不进版本库）。
+build/
+dist/
+*.pyz
+
+# 注意：assets/app.ico 与 assets/app.png 虽然由 tools/make_icon.py 生成，
+# 但体积极小且是打包的必需输入，保持入库。
+
+# ---------------------------------------------------------- 前端
+# web/.gitignore（Vite 脚手架自带）已覆盖 node_modules 与 web/dist，
+# 这里再兜一层，防止在仓库根目录误建同名目录。
+node_modules/
+web/dist/
+web/dist-ssr/
+.vite/
+*.local
+
+# ---------------------------------------------------------- 本地数据与凭据
+# 运行数据默认在 %APPDATA%\MedSafeVault；万一有人把 MEDSAFE_DATA_DIR 指到仓库内，
+# 下面的规则会挡住密钥库、备份和恢复密钥。
+data/
+*.db
+*.db-wal
+*.db-shm
+*.log
+*.msvbackup
+*.msvkey
+webview/
+.env
+.env.*
+secrets.*
+
+# ---------------------------------------------------------- 临时与调试
+tmp_*
+*.tmp
+*.orig
+*.rej
+
+# ---------------------------------------------------------- 编辑器 / 系统
+.vscode/
+.idea/
+*.sw?
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 说明：screenshots/ 是真机与界面验证记录，README 会引用，保持入库。
