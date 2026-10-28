@@ -16,6 +16,7 @@ from . import __version__
 from . import clipboard
 from . import paths
 from .paths import LocationError, data_dir
+from .crypto import is_backup_envelope
 from .store import VaultError, VaultLocked, VaultService
 
 log = logging.getLogger(__name__)
@@ -311,9 +312,11 @@ class Api:
         return self._guard(action)
 
     # ----------------------------------------------------------------- backup
-    def export_backup(self) -> dict:
+    def export_backup(self, password: str = "") -> dict:
         def action():
-            payload = self._service.build_backup()
+            # The whole file is sealed under this password, so the export is
+            # useless to anyone who does not know it - including the structure.
+            payload = self._service.export_backup(password or "")
             filename = f"MedSafeVault-备份-{datetime.now().strftime('%Y%m%d-%H%M')}.msvbackup"
             path = self._save_dialog(filename, ("加密备份 (*.msvbackup)",))
             if not path:
@@ -321,11 +324,7 @@ class Api:
             path = self._ensure_ext(path, ".msvbackup")
             with open(path, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, ensure_ascii=False, indent=2)
-            return {
-                "path": path,
-                "pages": len(payload.get("pages") or []),
-                "records": len(payload.get("records") or []),
-            }
+            return {"path": path, "sealed": True}
         return self._guard(action)
 
     def pick_backup(self) -> dict:
@@ -336,14 +335,26 @@ class Api:
             try:
                 with open(path, "r", encoding="utf-8") as handle:
                     payload = json.load(handle)
-                info = self._service.inspect_backup(payload)
+                if is_backup_envelope(payload):
+                    # Nothing can be read out of a sealed file before the
+                    # password arrives: report the shape, not the contents.
+                    info = None
+                else:
+                    info = self._service.inspect_backup(payload)
             except VaultError:
                 raise
             except Exception:
                 raise VaultError("无法读取备份文件，文件可能已损坏")
             self._pending_backup = payload
             self._pending_backup_path = path
-            return {"path": path, "info": info}
+            return {"path": path, "info": info, "sealed": info is None}
+        return self._guard(action)
+
+    def preview_backup(self, password: str) -> dict:
+        def action():
+            if not self._pending_backup:
+                raise VaultError("请先选择备份文件")
+            return {"info": self._service.inspect_backup(self._pending_backup, password or "")}
         return self._guard(action)
 
     def restore_backup(self, password: str) -> dict:

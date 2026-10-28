@@ -248,6 +248,8 @@ export interface AboutInfo {
 }
 
 export interface BackupInfo {
+  /** True when the whole file is sealed under a backup password. */
+  sealed?: boolean
   created_at: string
   app_version: string
   vault_id: string

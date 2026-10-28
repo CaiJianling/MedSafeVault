@@ -204,7 +204,7 @@ let demoPending: { mode: string; path: string; requested_at: string } | null = n
 
 let settings: Settings = {
   auto_lock_minutes: 5,
-  theme: 'dark',
+  theme: 'system',
   securecrt_path: 'C:\\Program Files\\VanDyke Software\\Clients\\SecureCRT.exe',
   table_font: 'mono',
   ui_scale: 'standard',
@@ -1006,7 +1006,7 @@ function stateInfo(): StateInfo {
     lock_reason: locked ? lockReason : null,
     auto_lock_minutes: settings.auto_lock_minutes,
     remaining_seconds: locked ? 0 : Math.max(0, settings.auto_lock_minutes * 60),
-    theme: 'dark',
+    theme: 'system',
     settings,
     recovery: {
       enabled: true,
@@ -1617,16 +1617,27 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         }
       case 'export_template':
         return { ok: true, path: 'C:\\Users\\CaiJianling\\Desktop\\导入模板.xlsx' }
-      case 'export_backup':
+      case 'export_backup': {
+        const backupPassword = String(args[0] || '')
+        if (backupPassword.length < 8) throw new Error('备份密码至少需要 8 位')
         return {
           path: 'C:\\Users\\CaiJianling\\Desktop\\MedSafeVault-备份.msvbackup',
-          pages: pages.length,
-          records: records.length,
+          sealed: true,
         }
+      }
       case 'pick_backup':
+        // Demo file is sealed: nothing can be read before the password arrives.
         return {
           path: 'C:\\Users\\CaiJianling\\Desktop\\MedSafeVault-备份.msvbackup',
+          info: null,
+          sealed: true,
+        }
+      case 'preview_backup': {
+        const backupPassword = String(args[0] || '')
+        if (backupPassword !== 'Backup#2026secret') throw new Error('备份密码不正确')
+        return {
           info: {
+            sealed: true,
             created_at: '2026-10-26 18:00:00',
             app_version: '2.0.0',
             vault_id: '8f2c1d7a4b9e6f30',
@@ -1636,8 +1647,9 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
             has_recovery: true,
           } satisfies BackupInfo,
         }
+      }
       case 'restore_backup':
-        if (String(args[0] || '').length < 4) throw new Error('备份的打开密码不正确')
+        if (String(args[0] || '') !== 'Backup#2026secret') throw new Error('备份密码不正确')
         locked = false
         return {
           state: stateInfo(),

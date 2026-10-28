@@ -155,6 +155,20 @@
 }
 
 .dark {
+  /* The :root status shades are deliberately dark so they read on light
+     surfaces. On dark surfaces the same text utilities have to flip back to
+     their light values, otherwise e.g. the bulk "move to recycle bin" button is
+     dark crimson on a near-black panel. Fills and borders keep the 400/500
+     steps, which are used behind white text. */
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-indigo-300: #a5b4fc;
+
   --msv-ink-950: #090d13;
   --msv-ink-900: #0e141d;
   --msv-ink-850: #121a25;

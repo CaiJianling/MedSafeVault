@@ -284,12 +284,14 @@ export const api = {
   exportTemplate: (pageId: number) =>
     call<{ cancelled?: boolean; path?: string }>('export_template', pageId),
 
-  exportBackup: () =>
-    call<{ cancelled?: boolean; path?: string; pages?: number; records?: number }>(
-      'export_backup',
-    ),
+  exportBackup: (password: string) =>
+    call<{ cancelled?: boolean; path?: string; sealed?: boolean }>('export_backup', password),
   pickBackup: () =>
-    call<{ cancelled?: boolean; path?: string; info?: BackupInfo }>('pick_backup'),
+    call<{ cancelled?: boolean; path?: string; info?: BackupInfo; sealed?: boolean }>(
+      'pick_backup',
+    ),
+  previewBackup: (password: string) =>
+    call<{ info: BackupInfo }>('preview_backup', password),
   restoreBackup: (password: string) =>
     call<{ state: StateInfo; info: BackupInfo; auto_backup: string | null }>(
       'restore_backup',

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import secrets
 import unicodedata
 from typing import Any
@@ -220,6 +221,82 @@ def normalize_recovery_code(code: str) -> str:
 def derive_recovery_kek(code: str, salt: bytes, iterations: int = KDF_ITERATIONS) -> bytes:
     normalized = normalize_recovery_code(code)
     return derive_kek(normalized, salt, iterations)
+
+
+# ------------------------------------------------------------------ backups
+# An exported backup is wrapped in its own envelope so the file is unreadable
+# without the password typed at export time. The DEK is additionally wrapped
+# under that password, which lets a restore need exactly one password instead
+# of both the backup password and the vault's open password.
+BACKUP_FORMAT = "MedSafeVault.EncryptedBackup"
+BACKUP_VERSION = 1
+BACKUP_INNER_FORMAT = "MedSafeVault.Backup"
+AAD_BACKUP = b"medsafe-vault/backup-payload/v1"
+AAD_BACKUP_DEK = b"medsafe-vault/backup-dek/v1"
+
+
+def derive_backup_key(password: str, salt: bytes, iterations: int = KDF_ITERATIONS) -> bytes:
+    if not password:
+        raise CryptoError("备份密码不能为空")
+    return derive_kek(password, salt, iterations)
+
+
+def seal_backup(password: str, payload: dict, dek: bytes | None = None,
+                created_at: str = "") -> dict:
+    """Encrypt a whole backup document under a user supplied password."""
+    if not isinstance(payload, dict):
+        raise CryptoError("备份内容格式不正确")
+    salt = new_salt()
+    key = derive_backup_key(password, salt)
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    wrapped_dek = None
+    if dek:
+        wrapped_dek = _seal_bytes(key, dek, AAD_BACKUP_DEK)
+    return {
+        "format": BACKUP_FORMAT,
+        "version": BACKUP_VERSION,
+        "created_at": created_at,
+        # Everything that identifies the vault or its contents stays inside the
+        # ciphertext: an unopened file must not reveal page names, the vault id
+        # or even which inner format it carries.
+        "kdf": {
+            "algorithm": KDF_ALGORITHM,
+            "iterations": KDF_ITERATIONS,
+            "salt": b64e(salt),
+        },
+        "cipher": {
+            "algorithm": "AES-256-GCM",
+            "payload": _seal_bytes(key, body, AAD_BACKUP),
+        },
+        "wrap_dek": wrapped_dek,
+    }
+
+
+def open_backup(envelope: dict, password: str) -> tuple[dict, bytes | None]:
+    """Verify the backup password and return (payload, dek or None)."""
+    if not isinstance(envelope, dict) or envelope.get("format") != BACKUP_FORMAT:
+        raise CryptoError("这不是 MedSafeVault 的加密备份文件")
+    kdf = envelope.get("kdf") or {}
+    cipher = envelope.get("cipher") or {}
+    try:
+        salt = b64d(str(kdf["salt"]))
+        iterations = int(kdf.get("iterations") or KDF_ITERATIONS)
+        key = derive_backup_key(password, salt, iterations)
+        body = _open_bytes(key, str(cipher["payload"]), AAD_BACKUP)
+    except CryptoError as exc:
+        raise CryptoError("备份密码不正确") from exc
+    payload = json.loads(body.decode("utf-8"))
+    dek: bytes | None = None
+    token = envelope.get("wrap_dek")
+    if token:
+        dek = _open_bytes(key, str(token), AAD_BACKUP_DEK)
+    if not isinstance(payload, dict):
+        raise CryptoError("备份内容格式不正确")
+    return payload, dek
+
+
+def is_backup_envelope(obj: Any) -> bool:
+    return isinstance(obj, dict) and obj.get("format") == BACKUP_FORMAT
 
 
 def wrap_for_recovery(code: str, salt: bytes, dek: bytes, iterations: int = KDF_ITERATIONS) -> str:

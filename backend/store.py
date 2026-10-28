@@ -30,12 +30,15 @@ from .crypto import (
     derive_kek,
     derive_recovery_kek,
     derive_secret_key,
+    is_backup_envelope,
     is_secret_token,
     make_verifier,
     new_dek,
     new_recovery_code,
     new_salt,
     normalize_recovery_code,
+    open_backup,
+    seal_backup,
     open_field,
     password_score,
     random_password,
@@ -360,7 +363,7 @@ class VaultService:
     def get_settings(self) -> dict:
         defaults = {
             "auto_lock_minutes": 5,
-            "theme": "dark",
+            "theme": "system",
             "securecrt_path": "",
             "mask_usernames": False,
             "mask_addresses": False,
@@ -381,7 +384,7 @@ class VaultService:
             settings["auto_lock_minutes"] = 5
         settings["auto_lock_minutes"] = max(0, min(settings["auto_lock_minutes"], 240))
         if settings.get("theme") not in ("dark", "light", "system"):
-            settings["theme"] = "dark"
+            settings["theme"] = "system"
         if settings.get("table_font") not in ("mono", "sans"):
             settings["table_font"] = "mono"
         if settings.get("ui_scale") not in ("small", "standard", "large"):
@@ -2218,6 +2221,15 @@ class VaultService:
     def build_backup(self) -> dict:
         with self._lock:
             self._ensure_unlocked()
+            return self._dump_backup()
+
+    def _dump_backup(self) -> dict:
+        """Snapshot the database as-is; every value is already ciphertext.
+
+        It deliberately does not require an unlock: restore uses it to take a
+        safety copy while the vault is still locked.
+        """
+        with self._lock:
             meta = {
                 row["k"]: row["v"]
                 for row in self.conn.execute("SELECT k,v FROM meta").fetchall()
@@ -2245,8 +2257,33 @@ class VaultService:
                 "history": history,
             }
 
-    def inspect_backup(self, payload: dict) -> dict:
-        if not isinstance(payload, dict) or payload.get("format") != "MedSafeVault.Backup":
+    def export_backup(self, password: str) -> dict:
+        """Build the backup and seal the whole file under a new password."""
+        with self._lock:
+            payload = self.build_backup()
+            if not password:
+                raise VaultError("请为备份设置密码")
+            return seal_backup(
+                password, payload, dek=self.key, created_at=payload.get("created_at") or ""
+            )
+
+    def _unwrap_backup(self, payload: dict, password: str | None):
+        """Return (payload, dek or None, sealed) for both backup formats."""
+        if is_backup_envelope(payload):
+            if not password:
+                raise VaultError("这是加密备份，请输入导出时设置的备份密码")
+            try:
+                inner, dek = open_backup(payload, password)
+            except CryptoError as exc:
+                raise VaultError(str(exc))
+            return inner, dek, True
+        if not isinstance(payload, dict):
+            raise VaultError("备份文件内容无法解析")
+        return payload, None, False
+
+    @staticmethod
+    def _backup_info(payload: dict, sealed: bool) -> dict:
+        if payload.get("format") != "MedSafeVault.Backup":
             raise VaultError("这不是 MedSafeVault 的加密备份文件")
         if int(payload.get("version") or 0) < 1:
             raise VaultError("备份文件版本不受支持")
@@ -2259,25 +2296,37 @@ class VaultService:
             "records": len(payload.get("records") or []),
             "history": len(payload.get("history") or []),
             "has_recovery": bool(meta.get("wrap_recovery")),
+            "sealed": sealed,
         }
+
+    def inspect_backup(self, payload: dict, password: str | None = None) -> dict:
+        inner, _dek, sealed = self._unwrap_backup(payload, password)
+        return self._backup_info(inner, sealed)
 
     def restore_backup(self, payload: dict, password: str) -> dict:
         with self._lock:
-            info = self.inspect_backup(payload)
+            payload, dek, sealed = self._unwrap_backup(payload, password)
+            info = self._backup_info(payload, sealed)
             meta = payload.get("meta") or {}
-            try:
-                salt = b64d(meta["salt_master"])
-                iterations = int(meta.get("iterations_master") or KDF_ITERATIONS)
-                kek = derive_kek(password, salt, iterations)
-                dek = unwrap_dek(kek, meta.get("wrap_master") or "")
-            except (KeyError, ValueError, CryptoError):
-                raise VaultError("备份的打开密码不正确")
-            if not check_verifier(dek, meta.get("verifier") or ""):
-                raise VaultError("备份的打开密码不正确")
+            if dek is not None:
+                # The envelope carried its own wrap, so the backup password is
+                # the only thing the operator has to type.
+                if not check_verifier(dek, meta.get("verifier") or ""):
+                    raise VaultError("备份内容与该密码不匹配")
+            else:
+                try:
+                    salt = b64d(meta["salt_master"])
+                    iterations = int(meta.get("iterations_master") or KDF_ITERATIONS)
+                    kek = derive_kek(password, salt, iterations)
+                    dek = unwrap_dek(kek, meta.get("wrap_master") or "")
+                except (KeyError, ValueError, CryptoError):
+                    raise VaultError("备份的打开密码不正确")
+                if not check_verifier(dek, meta.get("verifier") or ""):
+                    raise VaultError("备份的打开密码不正确")
 
             auto_backup = None
             try:
-                current = self.build_backup()
+                current = self._dump_backup()
                 backup_name = f"auto-before-restore-{datetime.now().strftime('%Y%m%d-%H%M%S')}.msvbackup"
                 auto_backup = str(data_dir() / backup_name)
                 with open(auto_backup, "w", encoding="utf-8") as fh:

@@ -56,6 +56,7 @@ import {
   Switch,
   Tip,
 } from './primitives'
+import { BackupPasswordDialog } from './BackupPasswordDialog'
 import { RecoveryCodeDialog } from './RecoveryCodeDialog'
 import {
   FALLBACK_CODE_FONTS,
@@ -146,6 +147,9 @@ export function SettingsDialog({
   const [backupInfo, setBackupInfo] = useState<BackupInfo | null>(null)
   const [backupPath, setBackupPath] = useState('')
   const [backupPassword, setBackupPassword] = useState('')
+  const [backupSealed, setBackupSealed] = useState(false)
+  const [checkingBackup, setCheckingBackup] = useState(false)
+  const [backupDialogOpen, setBackupDialogOpen] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -201,6 +205,7 @@ export function SettingsDialog({
       setConfirmPassword('')
       setBackupInfo(null)
       setBackupPassword('')
+      setBackupSealed(false)
     }
   }, [open, state.settings, state.recovery])
 
@@ -424,22 +429,19 @@ export function SettingsDialog({
     }
   }
 
-  async function exportBackup() {
+  async function runExport(password: string) {
     setExporting(true)
     try {
-      const result = await api.exportBackup()
+      const result = await api.exportBackup(password)
       if (result.cancelled) return
       toast.success(
         t('加密备份已导出'),
-        t('{path}\n包含 {pages} 个页面、{records} 条记录', {
-          path: shortPath(result.path ?? ''),
-          pages: result.pages ?? 0,
-          records: result.records ?? 0,
-        }),
+        t('整个文件已用备份密码加密：\n{path}', { path: shortPath(result.path ?? '') }),
         { duration: 8000 },
       )
     } catch (error) {
       toast.error(t('导出失败'), error instanceof ApiError ? error.message : t('请重试'))
+      throw error
     } finally {
       setExporting(false)
     }
@@ -450,11 +452,10 @@ export function SettingsDialog({
     try {
       const result = await api.pickBackup()
       if (result.cancelled) return
-      if (result.info) {
-        setBackupInfo(result.info)
-        setBackupPath(result.path ?? '')
-        setBackupPassword('')
-      }
+      setBackupSealed(Boolean(result.sealed))
+      setBackupInfo(result.info ?? null)
+      setBackupPath(result.path ?? '')
+      setBackupPassword('')
     } catch (error) {
       toast.error(
         t('无法读取备份'),
@@ -462,6 +463,26 @@ export function SettingsDialog({
       )
     } finally {
       setSavingKey('')
+    }
+  }
+
+  async function checkBackup() {
+    if (checkingBackup) return
+    if (!backupPassword) {
+      toast.warning(t('请输入备份密码'))
+      return
+    }
+    setCheckingBackup(true)
+    try {
+      const result = await api.previewBackup(backupPassword)
+      setBackupInfo(result.info)
+      toast.success(t('备份已解锁'), t('可以确认内容后覆盖恢复了。'))
+    } catch (error) {
+      setBackupInfo(null)
+      setBackupSealed(true)
+      toast.error(t('无法解锁备份'), error instanceof ApiError ? error.message : t('请重试'))
+    } finally {
+      setCheckingBackup(false)
     }
   }
 
@@ -970,13 +991,13 @@ export function SettingsDialog({
             <Section
               title={t('加密备份')}
               description={t(
-                '导出包含页面、记录与历史快照的完整备份。备份文件本身仍由打开密码保护。',
+                '导出时设置一个备份密码，整个文件（含页面结构与记录条数）都会被它加密；导入时必须验证该密码。',
               )}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={exportBackup}
+                  onClick={() => setBackupDialogOpen(true)}
                   disabled={exporting}
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--msv-accent)_28%,transparent)] bg-[var(--msv-accent-soft)] px-3 text-[0.75rem] text-[var(--msv-accent-text)] transition hover:brightness-105 disabled:opacity-50"
                 >
@@ -1007,7 +1028,7 @@ export function SettingsDialog({
               </p>
             </Section>
 
-            {backupInfo && (
+            {(backupInfo || backupSealed) && (
               <Section
                 title={t('确认恢复备份')}
                 description={t(
@@ -1024,8 +1045,12 @@ export function SettingsDialog({
                       {t('来源：{path}', { path: backupPath })}
                     </div>
                   )}
+                  {backupSealed && !backupInfo && (
+                    <div>{t('该文件已加密：输入备份密码后才能看到内容。')}</div>
+                  )}
                 </div>
 
+                {backupInfo && (
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[
                     { label: t('创建时间'), value: formatDateTime(backupInfo.created_at) },
@@ -1039,28 +1064,51 @@ export function SettingsDialog({
                     </div>
                   ))}
                 </div>
+                )}
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
                     <label className="field-label" htmlFor="backup-password">
-                      {t('备份的打开密码')}
+                      {backupSealed ? t('备份密码') : t('备份的打开密码')}
                     </label>
                     <input
                       id="backup-password"
                       className="msv-input"
                       type="password"
                       autoComplete="off"
-                      placeholder={t('输入导出该备份时使用的打开密码')}
+                      placeholder={
+                        backupSealed
+                          ? t('输入导出该备份时设置的备份密码')
+                          : t('输入导出该备份时使用的打开密码')
+                      }
                       value={backupPassword}
                       onChange={(event) => setBackupPassword(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && backupSealed && !backupInfo) {
+                          event.preventDefault()
+                          void checkBackup()
+                        }
+                      }}
                     />
                   </div>
                   <div className="flex items-center gap-2">
+                    {backupSealed && !backupInfo && (
+                      <button
+                        type="button"
+                        onClick={checkBackup}
+                        disabled={checkingBackup}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--msv-accent)_28%,transparent)] bg-[var(--msv-accent-soft)] px-3.5 text-[0.75rem] text-[var(--msv-accent-text)] transition hover:brightness-105 disabled:opacity-50"
+                      >
+                        {checkingBackup ? <Spinner className="size-3.5" /> : <KeyRound className="size-3.5" />}
+                        {t('验证并预览')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
                         setBackupInfo(null)
                         setBackupPassword('')
+                        setBackupSealed(false)
                         api.cancelBackup().catch(() => undefined)
                       }}
                       className="h-9 rounded-lg border border-line px-3.5 text-[0.75rem] text-ice-400 transition hover:border-line-strong hover:text-ice-200"
@@ -1070,7 +1118,7 @@ export function SettingsDialog({
                     <button
                       type="button"
                       onClick={restoreBackup}
-                      disabled={restoring}
+                      disabled={restoring || !backupInfo}
                       className="inline-flex h-9 items-center gap-2 rounded-lg bg-rose-500 px-3.5 text-[0.75rem] font-medium text-white transition hover:bg-rose-400 disabled:opacity-50"
                     >
                       {restoring && <Spinner className="size-3.5" />}
@@ -1420,6 +1468,11 @@ export function SettingsDialog({
         )}
       </ModalFrame>
 
+      <BackupPasswordDialog
+        open={backupDialogOpen}
+        onOpenChange={setBackupDialogOpen}
+        onConfirm={runExport}
+      />
       <RecoveryCodeDialog
         open={recoveryOpen}
         info={recoveryInfo}
