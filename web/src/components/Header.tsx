@@ -1,4 +1,5 @@
 import {
+  CircleHelp,
   History,
   Languages,
   LockKeyhole,
@@ -103,6 +104,7 @@ export function Header({
   onHistory,
   onRecycle,
   onSettings,
+  onHelp,
   onLock,
 }: {
   state: StateInfo
@@ -117,6 +119,7 @@ export function Header({
   onHistory: () => void
   onRecycle: () => void
   onSettings: () => void
+  onHelp: () => void
   onLock: () => void
 }) {
   const { t } = useI18n()
@@ -192,6 +195,9 @@ export function Header({
       </IconButton>
       <IconButton label={t('设置')} tip={t('设置')} tipDown onPress={onSettings}>
         <Settings2 className="size-4" />
+      </IconButton>
+      <IconButton label={t('帮助说明')} tip={t('帮助说明')} tipDown onPress={onHelp}>
+        <CircleHelp className="size-4" />
       </IconButton>
 
       <div className="mx-1 hidden h-5 w-px bg-line sm:block" />

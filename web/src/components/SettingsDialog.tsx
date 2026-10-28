@@ -31,6 +31,8 @@ import type {
   AboutInfo,
   Accent,
   BackupInfo,
+  DataLocation,
+  EnvironmentInfo,
   RecoveryInfo,
   RecoveryStatus,
   Settings,
@@ -211,6 +213,122 @@ export function SettingsDialog({
       .catch(() => setAbout(null))
       .finally(() => setAboutLoading(false))
   }, [open, tab])
+
+  // Data directory: the backend only rewrites <app dir>/MedSafeVault.json and
+  // moves the files while the app shuts down, so every change here is "pending".
+  const [location, setLocation] = useState<DataLocation | null>(null)
+  const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null)
+  const [customPath, setCustomPath] = useState('')
+  const [locationBusy, setLocationBusy] = useState(false)
+
+  useEffect(() => {
+    if (!open || tab !== 'data') return
+    api
+      .getDataLocation()
+      .then((result) => {
+        setLocation(result.location)
+        if (result.location.mode === 'custom') setCustomPath(result.location.path)
+      })
+      .catch(() => setLocation(null))
+    api
+      .getEnvironment()
+      .then((result) => setEnvironment(result.environment))
+      .catch(() => setEnvironment(null))
+  }, [open, tab])
+
+  const requestLocation = (mode: string, target?: string) => {
+    setLocationBusy(true)
+    api
+      .setDataLocation(mode, target)
+      .then((result) => {
+        setLocation((previous) => (previous ? { ...previous, pending: result.pending } : previous))
+        if (result.already_there) {
+          toast.success(t('数据目录已是该位置'), t('无需移动文件。'))
+        } else {
+          toast.success(t('已记录，重启后生效'), t('退出程序时会自动搬移数据。'))
+        }
+      })
+      .catch((error) =>
+        toast.error(t('目录未更改'), error instanceof ApiError ? error.message : t('请重试')),
+      )
+      .finally(() => setLocationBusy(false))
+  }
+
+  const pickFolder = () => {
+    api
+      .chooseDataDir()
+      .then((result) => {
+        if (result.cancelled || !result.path) return
+        setCustomPath(result.path)
+        requestLocation('custom', result.path)
+      })
+      .catch((error) =>
+        toast.error(t('无法打开文件夹选择'), error instanceof ApiError ? error.message : t('请重试')),
+      )
+  }
+
+  const cancelLocationRequest = () => {
+    api
+      .cancelDataLocation()
+      .then(() => setLocation((previous) => (previous ? { ...previous, pending: null } : previous)))
+      .catch(() => undefined)
+  }
+
+  const quitAndApply = () => {
+    api
+      .quit()
+      .then(() => undefined)
+      .catch(() => undefined)
+  }
+
+  const locationOptions: {
+    mode: 'appdata' | 'portable' | 'custom'
+    title: string
+    hint: string
+    path: string
+    icon: typeof HardDrive
+  }[] = [
+    {
+      mode: 'appdata',
+      title: t('%APPDATA%\\MedSafeVault'),
+      hint: t('默认位置，普通用户可写，不需要管理员权限。'),
+      path: location?.defaults.appdata ?? '',
+      icon: HardDrive,
+    },
+    {
+      mode: 'portable',
+      title: t('应用程序所在目录'),
+      hint: t('数据跟着 exe 走，适合拷到移动硬盘或共享盘。'),
+      path: location?.defaults.portable ?? '',
+      icon: FolderOpen,
+    },
+    {
+      mode: 'custom',
+      title: t('自定义目录'),
+      hint: t('放到加密盘或信息科指定的存储位置。'),
+      path:
+        customPath || (location?.mode === 'custom' ? location.path : t('尚未选择')),
+      icon: Settings2,
+    },
+  ]
+
+  const envRows: { name: string; value: string | null; description: string }[] = [
+    {
+      name: 'MEDSAFE_DATA_DIR',
+      value: environment?.MEDSAFE_DATA_DIR ?? location?.env_override ?? null,
+      description: t('强制指定数据目录，优先级高于本页面的设置。'),
+    },
+    {
+      name: 'MSV_DEV_URL',
+      value: environment?.MSV_DEV_URL ?? null,
+      description: t('让桌面端加载本地前端开发服务器，仅用于开发调试。'),
+    },
+    {
+      name: 'MSV_DEBUG',
+      value: environment?.MSV_DEBUG ?? null,
+      description: t('设为 1 时启动附带 WebView2 开发者工具。'),
+    },
+  ]
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword])
 
@@ -963,11 +1081,157 @@ export function SettingsDialog({
               </Section>
             )}
 
-            <Section title={t('本地存储')} description={t('密码库只保存在本机，不会同步到任何服务器。')}>
-              <div className="space-y-1.5">
+            <Section
+              title={t('数据目录')}
+              description={t('密码库、日志与备份都保存在这里。修改后重启生效，退出时自动搬移文件。')}
+              action={
+                <button
+                  type="button"
+                  onClick={() => {
+                    api.openDataDir().catch(() => undefined)
+                  }}
+                  className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[0.71875rem] text-ice-400 transition hover:border-line-strong hover:text-ice-200"
+                >
+                  <FolderOpen className="size-3.5" />
+                  {t('打开目录')}
+                </button>
+              }
+            >
+              <div className="space-y-2">
+                {locationOptions.map((option) => {
+                  const active = location?.mode === option.mode
+                  const Icon = option.icon
+                  return (
+                    <button
+                      key={option.mode}
+                      type="button"
+                      disabled={!location || locationBusy || Boolean(location.env_override)}
+                      onClick={() =>
+                        option.mode === 'custom'
+                          ? requestLocation('custom', customPath)
+                          : requestLocation(option.mode)
+                      }
+                      className={cn(
+                        'flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition',
+                        active
+                          ? 'border-[color-mix(in_srgb,var(--msv-accent)_40%,transparent)] bg-[var(--msv-accent-soft)]'
+                          : 'border-line bg-[var(--msv-tint)] hover:border-line-strong',
+                        (!location || location.env_override) && 'opacity-60',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border',
+                          active
+                            ? 'border-[color-mix(in_srgb,var(--msv-accent)_45%,transparent)] text-[var(--msv-accent-text)]'
+                            : 'border-line text-ice-600',
+                        )}
+                      >
+                        <Icon className="size-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="text-[0.78125rem] font-medium text-ice-200">{option.title}</span>
+                          {active && (
+                            <span className="chip !py-0 !text-[0.625rem]">{t('当前')}</span>
+                          )}
+                        </span>
+                        <span
+                          className="mt-0.5 block truncate font-mono text-[0.71875rem] text-ice-500"
+                          title={option.path}
+                        >
+                          {option.path || '—'}
+                        </span>
+                        <span className="mt-0.5 block text-[0.71875rem] leading-relaxed text-ice-600">
+                          {option.hint}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-2.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  className="msv-input min-w-0 flex-1"
+                  value={customPath}
+                  onChange={(event) => setCustomPath(event.target.value)}
+                  placeholder={t('例如 D:\\科室资料\\MedSafeVault数据')}
+                  aria-label={t('自定义数据目录')}
+                />
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={pickFolder}
+                    className="h-9 rounded-lg border border-line px-3 text-[0.75rem] text-ice-300 transition hover:border-line-strong hover:text-ice-100"
+                  >
+                    {t('浏览…')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!customPath.trim() || locationBusy}
+                    onClick={() => requestLocation('custom', customPath.trim())}
+                    className="h-9 rounded-lg bg-[var(--msv-accent)] px-3.5 text-[0.75rem] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    {t('使用此目录')}
+                  </button>
+                </div>
+              </div>
+
+              {location?.env_override && (
+                <div className="mt-2.5 rounded-lg border border-line bg-[var(--msv-tint)] px-3 py-2 text-[0.71875rem] leading-relaxed text-ice-500">
+                  <span className="font-mono text-ice-300">MEDSAFE_DATA_DIR</span>
+                  {' = '}
+                  <span className="break-all font-mono">{location.env_override}</span>
+                  <p className="mt-1 text-ice-600">
+                    {t('环境变量优先，取消该变量后才能在这里选择数据目录。')}
+                  </p>
+                </div>
+              )}
+
+              {location?.pending && (
+                <div className="mt-2.5 rounded-lg border border-amber-400/25 bg-amber-400/[0.07] px-3 py-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[0.75rem] font-medium text-amber-200">
+                        {t('新目录已记录，重启后生效')}
+                      </div>
+                      <div
+                        className="mt-0.5 break-all font-mono text-[0.71875rem] text-amber-100/90"
+                        title={location.pending.path}
+                      >
+                        {location.pending.path}
+                      </div>
+                      <p className="mt-1 text-[0.71875rem] leading-relaxed text-amber-200/80">
+                        {t('退出程序时会自动复制密码库与备份并校验，原目录改名保留，不会直接删除。')}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={quitAndApply}
+                          className="h-8 rounded-lg bg-amber-400/90 px-3 text-[0.71875rem] font-medium text-amber-950 transition hover:bg-amber-300"
+                        >
+                          {t('退出并应用')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelLocationRequest}
+                          className="h-8 rounded-lg border border-amber-400/30 px-3 text-[0.71875rem] text-amber-200 transition hover:bg-amber-400/10"
+                        >
+                          {t('取消变更')}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 space-y-1.5">
                 {[
-                  { label: t('数据目录'), value: state.data_dir },
+                  { label: t('数据目录'), value: location?.path ?? state.data_dir },
                   { label: t('数据库文件'), value: state.db_file },
+                  { label: t('占用空间'), value: formatBytes(location?.size_bytes ?? 0) },
                 ].map((item) => (
                   <div
                     key={item.label}
@@ -987,6 +1251,65 @@ export function SettingsDialog({
                     </button>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-2.5 rounded-lg border border-line bg-[var(--msv-tint)] px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Database className="size-3.5 shrink-0 text-ice-600" />
+                  <span className="shrink-0 text-[0.71875rem] text-ice-300">{t('配置文件')}</span>
+                  <span
+                    className="min-w-0 flex-1 truncate font-mono text-[0.71875rem] text-ice-500"
+                    title={location?.config_path}
+                  >
+                    {location?.config_path || '—'}
+                  </span>
+                </div>
+                <p className="mt-1 text-[0.71875rem] leading-relaxed text-ice-600">
+                  {t('配置文件记录数据目录位置，首次启动时自动创建在程序目录（{dir}）；该目录不可写时改存到 %APPDATA%\\MedSafeVault。', {
+                    dir: location?.app_dir || '',
+                  })}
+                </p>
+                <p className="mt-1 text-[0.71875rem] leading-relaxed text-ice-600">
+                  {t('浏览器缓存目录 webview 不参与搬移，它会在新位置自动重建。')}
+                </p>
+                {location && !location.config_writable && (
+                  <p className="mt-1 text-[0.71875rem] leading-relaxed text-amber-200">
+                    {t('配置文件所在目录不可写，数据目录设置无法保存。')}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-2.5">
+                <div className="flex items-center gap-1.5 text-[0.75rem] font-medium text-ice-300">
+                  <Terminal className="size-3.5" />
+                  {t('环境变量')}
+                </div>
+                <div className="mt-1.5 space-y-1.5">
+                  {envRows.map((row) => (
+                    <div
+                      key={row.name}
+                      className="rounded-lg border border-line bg-[var(--msv-tint)] px-3 py-2"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <code className="shrink-0 font-mono text-[0.71875rem] text-[var(--msv-accent-text)]">
+                          {row.name}
+                        </code>
+                        <span
+                          className="min-w-0 truncate font-mono text-[0.71875rem] text-ice-500"
+                          title={row.value || ''}
+                        >
+                          {row.value || t('未设置')}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[0.71875rem] leading-relaxed text-ice-600">
+                        {row.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[0.71875rem] leading-relaxed text-ice-600">
+                  {t('环境变量只影响本机当前用户或启动脚本，不写入注册表。')}
+                </p>
               </div>
             </Section>
           </div>

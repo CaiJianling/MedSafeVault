@@ -14,7 +14,8 @@ import webview
 
 from . import __version__
 from . import clipboard
-from .paths import data_dir
+from . import paths
+from .paths import LocationError, data_dir
 from .store import VaultError, VaultLocked, VaultService
 
 log = logging.getLogger(__name__)
@@ -402,6 +403,50 @@ class Api:
             folder = os.path.dirname(path) if os.path.isfile(path) else path
             os.startfile(folder)  # type: ignore[attr-defined]
             return {"ok": True}
+        return self._guard(action)
+
+    # ------------------------------------------------------ data location
+    def _location_guard(self, fn):
+        """LocationError is user-facing prose, so turn it into a VaultError."""
+        try:
+            return fn()
+        except LocationError as exc:
+            raise VaultError(str(exc)) from exc
+
+    def get_data_location(self) -> dict:
+        return self._guard(lambda: {"location": self._location_guard(paths.location_summary)})
+
+    def set_data_location(self, mode: str, path: str | None = None) -> dict:
+        def action():
+            result = self._location_guard(lambda: paths.request_location(mode, path))
+            log.info("Data directory change requested: %s", result.get("pending"))
+            return result
+        return self._guard(action)
+
+    def cancel_data_location(self) -> dict:
+        return self._guard(lambda: self._location_guard(paths.cancel_location_request))
+
+    def choose_data_dir(self) -> dict:
+        def action():
+            if not self._window:
+                raise VaultError("窗口尚未就绪")
+            result = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+            path = self._first_path(result)
+            if not path:
+                return {"cancelled": True}
+            return {"path": path, "pending": self._location_guard(lambda: paths.pending_location())}
+        return self._guard(action)
+
+    def get_environment(self) -> dict:
+        """Raw environment values, shown next to their explanation."""
+        def action():
+            return {
+                "environment": {
+                    "MEDSAFE_DATA_DIR": paths.env_override() or None,
+                    "MSV_DEV_URL": os.environ.get("MSV_DEV_URL", "").strip() or None,
+                    "MSV_DEBUG": os.environ.get("MSV_DEBUG", "").strip() or None,
+                }
+            }
         return self._guard(action)
 
     # ---------------------------------------------------------------- native

@@ -69,4 +69,9 @@ tmp_*
 Thumbs.db
 desktop.ini
 
+# 运行期生成：数据目录位置配置与「随程序走」的数据目录
+MedSafeVault.json
+MedSafeVaultData/
+MedSafeVault-location.json
+
 # 说明：screenshots/ 是真机与界面验证记录，README 会引用，保持入库。

@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  CircleHelp,
   Eye,
   EyeOff,
   FileKey2,
@@ -31,11 +32,13 @@ export function LockScreen({
   onUnlocked,
   onRecovery,
   onQuit,
+  onHelp,
 }: {
   state: StateInfo
   onUnlocked: (state: StateInfo) => void
   onRecovery: () => void
   onQuit: () => void
+  onHelp?: () => void
 }) {
   const { t } = useI18n()
   const [password, setPassword] = useState('')
@@ -252,14 +255,26 @@ export function LockScreen({
 
             <div className="mt-5 flex items-center justify-between px-1 text-[0.71875rem] text-ice-600">
               <span>MedSafeVault v{state.version} · AES-256-GCM</span>
-              <button
-                type="button"
-                onClick={onQuit}
-                className="inline-flex items-center gap-1 rounded px-1.5 py-1 transition hover:bg-[var(--msv-tint)] hover:text-ice-400"
-              >
-                <Power className="size-3" />
-                {t('退出')}
-              </button>
+              <span className="flex items-center gap-1">
+                {onHelp && (
+                  <button
+                    type="button"
+                    onClick={onHelp}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-1 transition hover:bg-[var(--msv-tint)] hover:text-ice-400"
+                  >
+                    <CircleHelp className="size-3" />
+                    {t('帮助')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onQuit}
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-1 transition hover:bg-[var(--msv-tint)] hover:text-ice-400"
+                >
+                  <Power className="size-3" />
+                  {t('退出')}
+                </button>
+              </span>
             </div>
           </div>
         </main>

@@ -28,6 +28,7 @@
 
 - 一键 RDP（自动生成临时 `.rdp` 并带用户名/端口）、SecureCRT 会话（本机路径可在设置中指定）、浏览器打开地址。
 - 单实例运行、亮/暗/跟随系统三态主题、8 种强调色、界面大小（小/标准/大）、界面字体与代码字体（读取系统字体）、中英文界面（跟随系统，可手动切换）；主题与配色存在密码库里，换机或换用户配置后打开仍是原来的样子。
+- 内置帮助说明（顶栏问号，锁屏与首次设置页也有入口）：11 个小节覆盖加密模型、恢复密钥、数据目录搬移、备份迁移、Excel、远程连接、快捷键、环境变量与老旧终端部署，中英文同稿。
 
 ---
 
@@ -89,7 +90,7 @@ set MSV_DEV_URL=http://localhost:5179
 ..\.venv\Scripts\python.exe MedSafeVault.py
 ```
 
-`MSV_DEBUG=1` 打开 WebView2 开发者工具。`tools/selftest.py` 是无界面自检脚本，可在没有 GUI 的机器上验证加密、导入导出与历史逻辑。`tools/desktop_shot.ps1` 启动真实窗口、模拟粘贴/按键并截取窗口位图，用于桌面端回归（注意它必须先声明 DPI 感知，否则截到的只是窗口左上角）。
+`MSV_DEBUG=1` 打开 WebView2 开发者工具。三个自检脚本：`tools/selftest.py` 无界面验证加密、导入导出与历史；`tools/test_location.py` 在临时目录里跑完数据目录搬移的全部分支；`tools/check_i18n.py` 扫描界面字符串，缺英文词条就报错（退出码 1）。`tools/desktop_shot.ps1` 启动真实窗口、模拟粘贴/按键并截取窗口位图，用于桌面端回归（注意它必须先声明 DPI 感知，否则截到的只是窗口左上角）。
 
 > 维护提示：pywebview 在注入 `window.pywebview.api` 之前会递归遍历 `js_api` 对象的每个**公开**属性。因此 `backend/api.py` 的 `Api` 只能暴露方法，服务与窗口引用必须写成 `_service` / `_window` / `_attach`；否则它会顺着引用爬进 sqlite 连接和整个 WinForms/WebView2 对象树，UI 线程被占用数十秒并抛出「maximum recursion depth exceeded」，前端表现为「本地服务未就绪」。
 
@@ -105,7 +106,7 @@ set MSV_DEV_URL=http://localhost:5179
 
 产物为 `dist/MedSafeVault.exe`（onefile、无控制台窗口、不压缩 UPX），构建结束会打印体积与 sha256。配置见 `MedSafeVault.spec`：打包 `web/dist` 与 `assets`，收集 `webview` 全部子模块（`edgechromium` / `winforms`）、`clr`、`bottle`、`openpyxl`、`xlrd`；版本信息来自 `packaging/version_info.txt`。
 
-当前产物 **24.4 MB**，`sha256 9784074e4bb79d7dfcc71f4fced3ed965f218b3ad6452d28aca2d08c3ad16bd2`（Python 3.13 x64 构建，已在真机完成启动与解锁验证，见第 9 节）。换机器或改依赖后重新构建，以脚本打印值为准。
+当前产物 **24.4 MB**，`sha256 866f96f4aa627229ca07072f610535e275bcac9e955b0df75250f3963a35cd64`（Python 3.13 x64 构建，已在真机完成启动、解锁与数据目录搬移验证，见第 9 节）。换机器或改依赖后重新构建，以脚本打印值为准。
 
 免管理员说明：onefile 解压到 `%TEMP%`，数据写入 `%APPDATA%\MedSafeVault`，不写注册表、不需要安装运行库，拷到任意可写目录即可运行。
 
@@ -134,7 +135,29 @@ set MSV_DEV_URL=http://localhost:5179
 
 ## 6. 数据位置与环境变量
 
-默认数据目录 `%APPDATA%\MedSafeVault`（`MEDSAFE_DATA_DIR` 覆盖）：
+数据目录有三种选择（设置 → 数据 → 数据目录），**改完重启生效**，退出时自动搬移：
+
+| 模式 | 实际位置 | 用途 |
+| --- | --- | --- |
+| `%APPDATA%\MedSafeVault` | `%APPDATA%\MedSafeVault` | 默认，普通用户可写 |
+| 应用程序所在目录 | `<程序目录>\MedSafeVaultData` | 数据随程序走，U 盘/共享盘 |
+| 自定义目录 | 手填或浏览选择 | 加密盘、信息科指定位置 |
+
+位置写在程序目录下的配置文件 `MedSafeVault.json`（首次启动自动生成）：
+
+```json
+{
+  "version": 1,
+  "data_location": { "mode": "appdata", "path": "C:\\Users\\…\\MedSafeVault" },
+  "pending_location": { "mode": "portable", "path": "D:\\…\\MedSafeVaultData", "requested_at": "…" }
+}
+```
+
+程序目录不可写（例如装在 `C:\Program Files`）时，配置文件自动改存 `%APPDATA%\MedSafeVault\MedSafeVault-location.json`；全程不写注册表。
+
+搬移在 `webview.start()` 返回、数据库连接与日志句柄释放之后执行：复制 `vault.db`/`app.log`/`*.msvbackup` → 对新库跑 `PRAGMA integrity_check` → 改写配置文件 → 把旧目录改名为 `…-旧数据-<时间戳>` 保留（绝不直接删除），最后弹窗告知结果。`webview/` 是浏览器缓存，不参与搬移，会在新位置重建；改名遇到文件占用会重试约 4 秒，仍失败则保留原目录并在弹窗中提示手动删除。
+
+数据目录内容：
 
 ```
 vault.db          加密台账（SQLite，WAL 模式）
@@ -146,7 +169,7 @@ webview/          WebView2 用户数据
 
 | 变量 | 作用 |
 | --- | --- |
-| `MEDSAFE_DATA_DIR` | 数据目录，用于多环境隔离或放到加密盘 |
+| `MEDSAFE_DATA_DIR` | 强制指定数据目录，优先级高于设置页；设置后本页选项变灰 |
 | `MSV_DEV_URL` | 让桌面端加载 Vite 开发服务器 |
 | `MSV_DEBUG` | `1` 打开开发者工具 |
 
@@ -187,11 +210,14 @@ Win7 终端要跑本项目，需要一条独立的 32 位工具链：
 
 ## 9. 验证记录
 
-2026-10-28 在 Windows 11 + WebView2 真机完成三轮验证，截图见 `screenshots/19-23`：
+2026-10-28 在 Windows 11 + WebView2 真机完成多轮验证，截图见 `screenshots/19-26`：
 
 - **源码运行**：启动 → 首次设置页 → 锁屏 → 输入密码解锁 → 主表格渲染正常（4 个页面、每页 2 条演示记录、密码列掩码 + 琥珀色高等级标记、自动锁定倒计时走时）。
 - **单文件 exe**：`dist/MedSafeVault.exe` 直接读取同一数据目录，解锁后解密并渲染出与源码运行完全一致的记录，日志 `frozen=True` 且无异常。
 - **亮色主题**：把 `settings.theme` 改成 light 后重启 exe，界面按密码库里的设置进入亮色（这一轮发现主题此前只存在浏览器本地存储、没有跟随设置，已在 `App.tsx` 修正为「设置优先 + 改动写回」）。
+- **数据目录搬移**：把 exe 与配置放到临时目录，配置预置 `pending_location` 指向程序目录 → 启动解锁正常（`24`）→ Alt+F4 正常退出 → 弹窗告知新目录与归档目录（`25`）→ 校验 `%TEMP%\…\app\MedSafeVaultData\vault.db` 就位、旧目录改名为 `MedSafeVault-旧数据-<时间戳>`、配置文件改写为 `portable` → 再次启动从新目录解锁，记录完好（`26`）。这一轮暴露出日志句柄未释放导致旧目录改名失败，已在退出流程里先关闭文件日志并重试改名。
+
+界面文案另用脚本做英文模式全量扫描：帮助页 11 个小节与设置四个标签页内无残留中文（仅语言菜单里的「中文」为有意保留），并按 WCAG 合成实际渲染色计算对比度，唯一低于 4.5:1 的是强调色实心按钮上的白字（4.1:1，与全站主按钮一致）。
 
 加密链路经后端脚本核对：不同层级密文前缀、遗留明文重封套、`suggest_values` 不返回密码列、删除/撤销/重做与历史解密一致。界面在 900px 窄屏与应用最小 1140×700（大字号）下均无挤压。演示数据统一使用 `203.0.113.x` / `192.0.2.x` / `198.51.100.x` 等文档保留地址与 `demo_*` 账号。
 

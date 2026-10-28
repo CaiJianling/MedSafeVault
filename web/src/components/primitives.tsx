@@ -203,6 +203,7 @@ export function DrawerFrame({
   footer,
   width = '560px',
   headerExtra,
+  bodyHeader,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -213,6 +214,8 @@ export function DrawerFrame({
   footer?: ReactNode
   width?: string
   headerExtra?: ReactNode
+  /** Fixed strip between the header and the scrolling body (section nav). */
+  bodyHeader?: ReactNode
 }) {
   // HeroUI only paints the off-screen state when React keeps the node mounted,
   // so the panel is parked at translate:100% for one frame and released right
@@ -266,6 +269,11 @@ export function DrawerFrame({
               </div>
               <Drawer.CloseTrigger className="absolute right-4 top-4 text-ice-500 hover:text-ice-200" />
             </Drawer.Header>
+                        {bodyHeader && (
+              <div className="shrink-0 border-b border-line bg-ink-900 px-5 py-2.5">
+                {bodyHeader}
+              </div>
+            )}
             <Drawer.Body className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</Drawer.Body>
             {footer && (
               <Drawer.Footer className="shrink-0 border-t border-line px-5 py-3.5">

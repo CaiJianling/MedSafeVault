@@ -11,7 +11,7 @@ from pathlib import Path
 
 import webview
 
-from backend import __version__
+from backend import __version__, paths
 from backend.api import Api
 from backend.paths import data_dir, log_path, resource_path, web_dir
 from backend.store import VaultService
@@ -62,6 +62,7 @@ def message_box(title: str, text: str, error: bool = False) -> None:
 def main() -> int:
     setup_logging()
     log.info("Starting MedSafeVault %s (frozen=%s)", __version__, getattr(sys, "frozen", False))
+    log.info("Config file: %s", paths.config_path())
     if not ensure_single_instance():
         message_box("MedSafeVault", "MedSafeVault 已经在运行中。\n请在任务栏中找到已打开的窗口。")
         return 1
@@ -70,7 +71,15 @@ def main() -> int:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MedSafeVault.App.2")
     except Exception:
         pass
-    data_dir().mkdir(parents=True, exist_ok=True)
+    try:
+        location = paths.current_location()
+        log.info(
+            "Data directory: %s (mode=%s)", location["path"], location["mode"]
+        )
+        data_dir().mkdir(parents=True, exist_ok=True)
+    except paths.LocationError as exc:
+        message_box("MedSafeVault 启动失败", f"{exc}\n\n配置文件：{paths.config_path()}", error=True)
+        return 1
 
     index = web_dir() / "index.html"
     dev_url = os.environ.get("MSV_DEV_URL", "").strip()
@@ -119,7 +128,42 @@ def main() -> int:
         return 1
     finally:
         service.close()
+        close_file_logging()
+        finish_location_move()
     return 0
+
+
+def close_file_logging() -> None:
+    """Release app.log so the old data directory can be renamed on exit."""
+    for handler in list(logging.getLogger().handlers):
+        if isinstance(handler, logging.FileHandler):
+            try:
+                handler.flush()
+                handler.close()
+            except Exception:
+                pass
+            logging.getLogger().removeHandler(handler)
+
+
+def finish_location_move() -> None:
+    """Apply a pending data-directory change now that the database is closed."""
+    try:
+        report = paths.apply_location_request()
+    except Exception:  # pragma: no cover - defensive
+        log.exception("Data directory move crashed")
+        return
+    if not report.get("moved"):
+        if report.get("error"):
+            log.error("%s", report["error"])
+            message_box("MedSafeVault 数据目录未移动", str(report["error"]), error=True)
+        return
+    log.info("Data directory moved from %s to %s", report.get("from"), report.get("to"))
+    text = f"数据目录已移动到：\n{report.get('to')}"
+    if report.get("archived"):
+        text += f"\n\n原目录已保留为：\n{report['archived']}\n确认无误后可以删除。"
+    if report.get("warning"):
+        text += f"\n\n注意：{report['warning']}"
+    message_box("MedSafeVault 数据目录已更新", text)
 
 
 if __name__ == "__main__":

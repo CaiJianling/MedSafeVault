@@ -4,10 +4,13 @@ import type {
   AboutInfo,
   BackupInfo,
   Bootstrap,
+  DataLocation,
+  EnvironmentInfo,
   ExcelPreview,
   HistoryList,
   Page,
   PageTemplate,
+  PendingLocation,
   RecordDetail,
   RecordList,
   RecycleList,
@@ -301,5 +304,19 @@ export const api = {
   getAbout: () => call<{ about: AboutInfo }>('get_about'),
   openDataDir: () => call<{ ok: boolean }>('open_data_dir'),
   openPath: (path: string) => call<{ ok: boolean }>('open_path', path),
+
+  // Data directory: a change is only written to the config and applied by the
+  // backend while the app shuts down, so the UI always shows "restart needed".
+  getDataLocation: () => call<{ location: DataLocation }>('get_data_location'),
+  setDataLocation: (mode: string, path?: string) =>
+    call<{
+      pending: PendingLocation | null
+      location: { mode: string; path: string }
+      already_there?: boolean
+    }>('set_data_location', mode, path ?? ''),
+  cancelDataLocation: () => call<{ pending: null }>('cancel_data_location'),
+  chooseDataDir: () => call<{ cancelled?: boolean; path?: string }>('choose_data_dir'),
+  getEnvironment: () => call<{ environment: EnvironmentInfo }>('get_environment'),
+
   quit: () => call<{ ok: boolean }>('quit'),
 }

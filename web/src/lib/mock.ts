@@ -9,6 +9,7 @@ import type {
   BackupInfo,
   Bootstrap,
   Column,
+  DataLocation,
   ExcelPreview,
   HistoryItem,
   HistoryList,
@@ -193,6 +194,13 @@ const demoMode = new URLSearchParams(window.location.search).get('demo')
 let initialized = demoMode !== 'setup'
 let locked = demoMode === 'setup' || demoMode === 'locked'
 let lockReason: string | null = demoMode === 'locked' ? 'auto' : null
+
+const DEMO_PORTABLE_DIR = 'MedSafeVaultData'
+export const DEMO_APPDATA_DIR = 'C:\\Users\\CaiJianling\\AppData\\Roaming\\MedSafeVault'
+
+/** Demo stand-in for <app dir>/MedSafeVault.json (browser mode has no disk). */
+let demoLocation = { mode: 'appdata', path: DEMO_APPDATA_DIR }
+let demoPending: { mode: string; path: string; requested_at: string } | null = null
 
 let settings: Settings = {
   auto_lock_minutes: 5,
@@ -1730,6 +1738,42 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         return { ok: true }
       case 'open_path':
         return { ok: true }
+      case 'get_data_location':
+        return {
+          location: {
+            mode: demoLocation.mode as DataLocation['mode'],
+            path: demoLocation.path,
+            pending: demoPending as DataLocation['pending'],
+            defaults: { appdata: DEMO_APPDATA_DIR, portable: 'D:\\MedSafeVault\\' + DEMO_PORTABLE_DIR },
+            app_dir: 'D:\\MedSafeVault',
+            config_path: 'D:\\MedSafeVault\\MedSafeVault.json',
+            config_writable: true,
+            frozen: false,
+            env_override: '',
+            size_bytes: 2_487_296,
+          },
+        }
+      case 'set_data_location': {
+        const mode = String(args[0] || 'appdata')
+        const custom = String(args[1] || '').trim()
+        const target =
+          mode === 'appdata'
+            ? DEMO_APPDATA_DIR
+            : mode === 'portable'
+              ? 'D:\\MedSafeVault\\' + DEMO_PORTABLE_DIR
+              : custom
+        demoPending = { mode, path: target, requested_at: new Date().toLocaleString() }
+        return { pending: demoPending, location: { mode: demoLocation.mode, path: demoLocation.path } }
+      }
+      case 'cancel_data_location':
+        demoPending = null
+        return { pending: null }
+      case 'choose_data_dir':
+        return { path: 'D:\\科室资料\\MedSafeVault数据' }
+      case 'get_environment':
+        return {
+          environment: { MEDSAFE_DATA_DIR: null, MSV_DEV_URL: 'http://localhost:5179', MSV_DEBUG: null },
+        }
       case 'quit':
         return { ok: true }
       default:

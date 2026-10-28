@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Check,
+  CircleHelp,
   Eye,
   EyeOff,
   FileKey2,
@@ -40,10 +41,12 @@ export function SetupScreen({
   version,
   onReady,
   onQuit,
+  onHelp,
 }: {
   version: string
   onReady: (state: StateInfo) => void
   onQuit: () => void
+  onHelp?: () => void
 }) {
   const { t } = useI18n()
   const [password, setPassword] = useState('')
@@ -290,14 +293,26 @@ export function SetupScreen({
 
             <div className="mt-5 flex items-center justify-between px-1 text-[0.71875rem] text-ice-600">
               <span>{t('MedSafeVault v{version} · 纯本地加密存储', { version })}</span>
-              <button
-                type="button"
-                onClick={onQuit}
-                className="inline-flex items-center gap-1 rounded px-1.5 py-1 transition hover:bg-[var(--msv-tint)] hover:text-ice-400"
-              >
-                <Power className="size-3" />
-                {t('退出')}
-              </button>
+              <span className="flex items-center gap-1">
+                {onHelp && (
+                  <button
+                    type="button"
+                    onClick={onHelp}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-1 transition hover:bg-[var(--msv-tint)] hover:text-ice-400"
+                  >
+                    <CircleHelp className="size-3" />
+                    {t('帮助')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onQuit}
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-1 transition hover:bg-[var(--msv-tint)] hover:text-ice-400"
+                >
+                  <Power className="size-3" />
+                  {t('退出')}
+                </button>
+              </span>
             </div>
           </div>
         </main>

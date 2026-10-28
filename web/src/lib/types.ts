@@ -71,6 +71,34 @@ export interface RecoveryStatus {
   generation: number
 }
 
+export type DataLocationMode = 'appdata' | 'portable' | 'custom' | 'env'
+
+export interface PendingLocation {
+  mode: DataLocationMode
+  path: string
+  requested_at: string
+}
+
+/** Where vault.db lives, as reported by backend/paths.py. */
+export interface DataLocation {
+  mode: DataLocationMode
+  path: string
+  pending: PendingLocation | null
+  defaults: { appdata: string; portable: string }
+  app_dir: string
+  config_path: string
+  config_writable: boolean
+  frozen: boolean
+  env_override: string
+  size_bytes: number
+}
+
+export interface EnvironmentInfo {
+  MEDSAFE_DATA_DIR: string | null
+  MSV_DEV_URL: string | null
+  MSV_DEBUG: string | null
+}
+
 export interface StateInfo {
   initialized: boolean
   locked: boolean

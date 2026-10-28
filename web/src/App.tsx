@@ -9,6 +9,7 @@ import type { Page, PageTemplate, StateInfo, UndoState } from './lib/types'
 import { isEditableTarget, throttle } from './lib/utils'
 import { BrandMark } from './components/Brand'
 import { Header } from './components/Header'
+import { HelpDrawer } from './components/HelpDrawer'
 import { HistoryDrawer } from './components/HistoryDrawer'
 import { LockScreen } from './components/LockScreen'
 import { PageDialog } from './components/PageDialog'
@@ -97,6 +98,7 @@ export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [recycleOpen, setRecycleOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
 
   const themeMode = (theme === 'light' || theme === 'dark' ? theme : 'system') as ThemeMode
@@ -414,6 +416,7 @@ export default function App() {
         version={state?.version ?? ''}
         onReady={handleUnlocked}
         onQuit={quitApp}
+        onHelp={() => setHelpOpen(true)}
       />
     )
   } else if (phase === 'locked' || !state) {
@@ -423,6 +426,7 @@ export default function App() {
         onUnlocked={handleUnlocked}
         onRecovery={() => setRecoveryOpen(true)}
         onQuit={quitApp}
+        onHelp={() => setHelpOpen(true)}
       />
     ) : (
       <BootScreen label={t('正在读取密码库状态…')} />
@@ -446,6 +450,7 @@ export default function App() {
           onHistory={() => setHistoryOpen(true)}
           onRecycle={() => setRecycleOpen(true)}
           onSettings={() => setSettingsOpen(true)}
+          onHelp={() => setHelpOpen(true)}
           onLock={lockNow}
         />
 
@@ -545,6 +550,19 @@ export default function App() {
         open={recoveryOpen}
         onOpenChange={setRecoveryOpen}
         onRecovered={handleUnlocked}
+      />
+      <HelpDrawer
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        version={state?.version ?? ''}
+        onOpenSettings={
+          phase === 'ready'
+            ? () => {
+                setHelpOpen(false)
+                setSettingsOpen(true)
+              }
+            : undefined
+        }
       />
       <Toaster />
     </ConfirmProvider>
