@@ -44,8 +44,8 @@ def is_encrypted(path: str) -> bool:
         flag = office.is_encrypted
         return bool(flag() if callable(flag) else flag)
     except Exception:
-        # CSV, .xls or a damaged file: not something msoffcrypto recognises, and
-        # the regular readers below produce the useful error instead.
+        # CSV or a damaged file: not something msoffcrypto recognises, and the
+        # regular readers below produce the useful error instead.
         return False
 
 
@@ -111,16 +111,21 @@ def read_table(path: str, password: str = "") -> tuple[list[str], list[list[Any]
         else:
             raise RuntimeError("无法识别 CSV 编码")
     elif ext == ".xls":
-        if is_encrypted(path):
-            # Legacy BIFF encryption is out of scope; Excel can convert it though.
-            raise ExcelPasswordRequired(
-                "这个 .xls 文件设置了打开密码，请在 Excel 中另存为 .xlsx 后再导入"
-            )
         try:
             import xlrd  # type: ignore
         except ImportError as exc:
             raise RuntimeError("读取 .xls 需要安装 xlrd，建议另存为 .xlsx") from exc
-        sheet = xlrd.open_workbook(path).sheet_by_index(0)
+
+        if is_encrypted(path):
+            if not password:
+                raise ExcelPasswordRequired("这个 Excel 文件设置了打开密码，请输入密码")
+            # xlrd cannot read an encrypted BIFF stream, so decrypt it in memory
+            # first - the decrypted workbook only ever lives in this buffer.
+            sheet = xlrd.open_workbook(
+                file_contents=_decrypt_to_buffer(path, password).getvalue()
+            ).sheet_by_index(0)
+        else:
+            sheet = xlrd.open_workbook(path).sheet_by_index(0)
         rows = [tuple(sheet.row_values(i)) for i in range(sheet.nrows)]
     else:
         raise RuntimeError("仅支持 .xlsx / .xls / .csv 文件")

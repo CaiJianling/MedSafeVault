@@ -990,8 +990,7 @@ const EN: Record<string, string> = {
   '密码只在本机内存中用于解密这个文件，不会被保存。': 'The password is only used in local memory to decrypt this file and is not saved.',
   'Excel 打开密码不正确': 'The Excel opening password is incorrect',
   '{n} 条记录已写入（已设置打开密码）\n{path}': '{n} records written (opening password set)\n{path}',
-  '这个 .xls 文件设置了打开密码，请在 Excel 中另存为 .xlsx 后再导入': 'This .xls file has an opening password; re-save it as .xlsx in Excel before importing',
-  '导出时可勾选「用密码保护工作簿」，Excel 打开时会要求输入这个密码；导入带密码的文件时会先弹窗要求验证。': 'On export you can tick “Protect the workbook with a password”: Excel then asks for it when opening. Importing a protected file prompts for that password first.',
+  '导出时可勾选「用密码保护工作簿」，Excel 打开时会要求输入这个密码；导入带打开密码的 .xlsx / .xls 文件时会先弹窗要求验证，解密只在内存中进行。': 'On export you can tick “Protect the workbook with a password”: Excel then asks for it when opening. Importing a protected .xlsx / .xls prompts for that password first, and decryption happens in memory only.',
 }
 
 const EN_MONTHS = [

@@ -86,11 +86,45 @@ except VaultError as exc:
     print("short password ->", exc)
 assert not short.exists(), "校验失败时不应该留下文件"
 
-# A protected .xls cannot be read; make sure the message points at the fix.
+# ------------------------------------------------ encrypted legacy .xls
+# tools/fixtures/encrypted-legacy.xls was saved by Excel as BIFF8 with the
+# opening password below; it holds two clearly fictional demo rows.
+XLS_PW = "XlsPass#2026"
+xls_fixture = Path(__file__).resolve().parent / "fixtures" / "encrypted-legacy.xls"
+assert excelio.is_encrypted(str(xls_fixture)), "样本 .xls 应该是加密的"
+
+try:
+    excelio.read_table(str(xls_fixture))
+    raise AssertionError("加密 .xls 没有密码时应该提示输入密码")
+except excelio.ExcelPasswordRequired as exc:
+    print("xls no password ->", exc)
+
+try:
+    excelio.read_table(str(xls_fixture), "wrong-password")
+    raise AssertionError("加密 .xls 错误密码应该被拒绝")
+except excelio.ExcelPasswordInvalid as exc:
+    print("xls wrong password ->", exc)
+
+xls_headers, xls_body = excelio.read_table(str(xls_fixture), XLS_PW)
+assert "服务器地址" in xls_headers and len(xls_body) == 2, (xls_headers, xls_body)
+assert xls_body[0][1] == "192.0.2.10", xls_body[0]
+
+xls_preview = service.preview_excel(page["id"], str(xls_fixture), XLS_PW)
+assert xls_preview["rows"] == 2 and xls_preview["mapped"], xls_preview
+assert xls_preview["samples"][0]["password"] == excelio.MASK, xls_preview["samples"][0]
+
+before_xls = service.list_records(page["id"])["total"]
+xls_imported = service.import_excel(page["id"], str(xls_fixture), XLS_PW)
+assert xls_imported["count"] == 2, xls_imported
+assert service.list_records(page["id"])["total"] == before_xls + 2
+print("xls right password -> preview 2 rows, import", xls_imported["count"], "rows")
+
+# A damaged .xls that merely looks like an OLE container must fail loudly.
 fake_xls = WORKDIR / "fake.xls"
 fake_xls.write_bytes(b"\xd0\xcf\x11\xe0not a real xls")
 try:
     excelio.read_table(str(fake_xls))
+    raise AssertionError("损坏的 .xls 不应该被当成空表")
 except Exception:
     pass
 
