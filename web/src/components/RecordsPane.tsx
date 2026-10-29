@@ -27,7 +27,9 @@ import { translateServerText, useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
 import type { Column, ExcelPreview, Page, RecordItem } from '../lib/types'
 import { cn, relativeTime, shortPath } from '../lib/utils'
+import { ExcelExportDialog } from './ExcelExportDialog'
 import { ExcelImportDialog } from './ExcelImportDialog'
+import { ExcelUnlockDialog } from './ExcelUnlockDialog'
 import { PageIcon } from './PageIcon'
 import {
   ContextMenu,
@@ -81,6 +83,9 @@ export function RecordsPane({
   const [recordId, setRecordId] = useState<number | null>(null)
   const [preview, setPreview] = useState<ExcelPreview | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [lockedFile, setLockedFile] = useState<string | null>(null)
+  const [importPassword, setImportPassword] = useState('')
   const [excelBusy, setExcelBusy] = useState('')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [pageInput, setPageInput] = useState('')
@@ -96,6 +101,12 @@ export function RecordsPane({
     setSelected(new Set())
     setRowMenu(null)
   }, [page?.id, appliedQuery, sortKey, sortDir, limit])
+
+  useEffect(() => {
+    setExportOpen(false)
+    setLockedFile(null)
+    setImportPassword('')
+  }, [page?.id])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -299,7 +310,12 @@ export function RecordsPane({
     try {
       const result = await api.previewExcel(page.id)
       if (result.cancelled) return
+      if (result.locked && result.path) {
+        setLockedFile(result.path)
+        return
+      }
       if (result.preview) {
+        setImportPassword('')
         setPreview(result.preview)
         setPreviewOpen(true)
       }
@@ -310,25 +326,36 @@ export function RecordsPane({
     }
   }
 
-  async function exportExcel() {
-    if (!page || excelBusy) return
+  async function unlockExcel(file: string, password: string) {
+    if (!page) return
+    const result = await api.previewExcelFile(page.id, file, password)
+    if (result.locked || !result.preview) {
+      throw new Error(t('Excel 打开密码不正确'))
+    }
+    // Keep the password for the later import step; the unlock dialog closes
+    // because the file is no longer locked.
+    setImportPassword(password)
+    setPreview(result.preview)
+    setLockedFile(null)
+    setPreviewOpen(true)
+  }
+
+  async function exportExcel(password: string) {
+    if (!page) return
     setExcelBusy('export')
     try {
-      const result = await api.exportExcel(page.id)
+      const result = await api.exportExcel(page.id, password)
       if (result.cancelled) return
-      toast.success(
-        t('导出完成'),
-        t('{n} 条记录已写入\n{path}', {
-          n: result.count ?? 0,
-          path: shortPath(result.path ?? ''),
-        }),
-        { duration: 7000 },
-      )
-    } catch (err) {
-      toast.error(
-        t('导出失败'),
-        err instanceof ApiError ? err.message : t('请关闭占用中的文件后重试'),
-      )
+      const detail = password
+        ? t('{n} 条记录已写入（已设置打开密码）\n{path}', {
+            n: result.count ?? 0,
+            path: shortPath(result.path ?? ''),
+          })
+        : t('{n} 条记录已写入\n{path}', {
+            n: result.count ?? 0,
+            path: shortPath(result.path ?? ''),
+          })
+      toast.success(t('导出完成'), detail, { duration: 7000 })
     } finally {
       setExcelBusy('')
     }
@@ -432,8 +459,8 @@ export function RecordsPane({
             <MenuItem
               icon={<Download className="size-3.5" />}
               label={excelBusy === 'export' ? t('正在导出…') : t('导出当前页 Excel')}
-              onSelect={exportExcel}
-              disabled={Boolean(excelBusy) || total === 0}
+              onSelect={() => setExportOpen(true)}
+              disabled={Boolean(excelBusy) || (page.record_count ?? total) === 0}
             />
             <MenuSeparator />
             <MenuItem
@@ -778,14 +805,38 @@ export function RecordsPane({
       <ExcelImportDialog
         open={previewOpen}
         preview={preview}
+        password={importPassword}
         pageName={page.name}
         onOpenChange={(open) => {
           setPreviewOpen(open)
-          if (!open) setPreview(null)
+          if (!open) {
+            setPreview(null)
+            setImportPassword('')
+          }
         }}
         onImported={() => {
           setRefreshLocal((value) => value + 1)
           onChanged()
+        }}
+      />
+
+      <ExcelExportDialog
+        open={exportOpen}
+        pageName={page.name}
+        rowCount={page.record_count ?? total}
+        onOpenChange={setExportOpen}
+        onConfirm={exportExcel}
+      />
+
+      <ExcelUnlockDialog
+        open={Boolean(lockedFile)}
+        fileName={(lockedFile ?? '').split(/[\\/]/).pop() || lockedFile || ''}
+        onOpenChange={(open) => {
+          if (!open) setLockedFile(null)
+        }}
+        onSubmit={(password) => {
+          if (lockedFile) return unlockExcel(lockedFile, password)
+          return undefined
         }}
       />
     </div>

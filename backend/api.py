@@ -282,22 +282,42 @@ class Api:
             ))
             if not path:
                 return {"cancelled": True}
-            data = self._service.preview_excel(int(page_id), path)
-            return {"preview": data}
+            return self._preview_excel_path(int(page_id), path, "")
         return self._guard(action)
 
-    def import_excel(self, page_id: int, path: str) -> dict:
-        return self._guard(lambda: self._service.import_excel(int(page_id), path))
+    def preview_excel_file(self, page_id: int, path: str, password: str = "") -> dict:
+        """Re-read an already chosen file, e.g. after the user entered its password."""
+        return self._guard(lambda: self._preview_excel_path(int(page_id), path, password or ""))
 
-    def export_excel(self, page_id: int) -> dict:
+    def _preview_excel_path(self, page_id: int, path: str, password: str) -> dict:
+        from .excelio import ExcelPasswordRequired
+
+        try:
+            data = self._service.preview_excel(page_id, path, password)
+        except ExcelPasswordRequired:
+            # The password prompt is part of the flow, not an error dialog.
+            return {"locked": True, "path": path}
+        return {"preview": data}
+
+    def import_excel(self, page_id: int, path: str, password: str = "") -> dict:
+        return self._guard(
+            lambda: self._service.import_excel(int(page_id), path, password or "")
+        )
+
+    def export_excel(self, page_id: int, password: str = "") -> dict:
         def action():
+            from .excelio import MIN_WORKBOOK_PASSWORD
+
+            password_value = password or ""
+            if password_value and len(password_value) < MIN_WORKBOOK_PASSWORD:
+                raise VaultError(f"Excel 密码至少需要 {MIN_WORKBOOK_PASSWORD} 位")
             page = self._service.get_page(int(page_id))
             filename = f"{page['name']}-{datetime.now().strftime('%Y%m%d')}.xlsx"
             path = self._save_dialog(filename, ("Excel 文件 (*.xlsx)",))
             if not path:
                 return {"cancelled": True}
             path = self._ensure_ext(path, ".xlsx")
-            return self._service.export_excel(int(page_id), path)
+            return self._service.export_excel(int(page_id), path, password_value)
         return self._guard(action)
 
     def export_template(self, page_id: int) -> dict:

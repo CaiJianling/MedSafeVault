@@ -27,7 +27,8 @@ hiddenimports = [
     "proxy_tools",
     "openpyxl",
     "xlrd",
-] + collect_submodules("webview")
+    "olefile",
+] + collect_submodules("webview") + collect_submodules("msoffcrypto")
 
 a = Analysis(
     [str(ROOT / "MedSafeVault.py")],

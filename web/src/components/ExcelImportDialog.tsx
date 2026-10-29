@@ -21,12 +21,14 @@ function basename(path: string): string {
 export function ExcelImportDialog({
   open,
   preview,
+  password = '',
   pageName,
   onOpenChange,
   onImported,
 }: {
   open: boolean
   preview: ExcelPreview | null
+  password?: string
   pageName: string
   onOpenChange: (open: boolean) => void
   onImported: (count: number) => void
@@ -49,7 +51,7 @@ export function ExcelImportDialog({
     setImporting(true)
     setError('')
     try {
-      const result = await api.importExcel(preview.page_id, preview.path)
+      const result = await api.importExcel(preview.page_id, preview.path, password)
       toast.success(
         t('导入完成'),
         t('已写入 {n} 条记录，可在修改历史中撤回', { n: result.count }),

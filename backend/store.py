@@ -2078,18 +2078,18 @@ class VaultService:
         return self.reveal_secret(record_id, key)["value"]
 
     # ------------------------------------------------------------------ excel
-    def preview_excel(self, page_id: int, path: str) -> dict:
+    def preview_excel(self, page_id: int, path: str, password: str = "") -> dict:
         with self._lock:
             self._ensure_unlocked()
             from . import excelio
 
             cols = self.get_columns(page_id, include_hidden=True)
-            result = excelio.preview(path, cols)
+            result = excelio.preview(path, cols, password=password)
             result["path"] = path
             result["page_id"] = page_id
             return result
 
-    def import_excel(self, page_id: int, path: str) -> dict:
+    def import_excel(self, page_id: int, path: str, password: str = "") -> dict:
         with self._lock:
             self._ensure_unlocked()
             from . import excelio
@@ -2098,7 +2098,7 @@ class VaultService:
             if page["deleted_at"]:
                 raise VaultError("页面在回收站中，请先恢复")
             cols = self.get_columns(page_id, include_hidden=True)
-            rows = excelio.read_rows(path, cols)
+            rows = excelio.read_rows(path, cols, password=password)
             if not rows:
                 raise VaultError("没有读取到可导入的数据")
             stamp = now_text()
@@ -2118,11 +2118,13 @@ class VaultService:
                 )
             return {"ok": True, "count": len(rows)}
 
-    def export_excel(self, page_id: int, path: str) -> dict:
+    def export_excel(self, page_id: int, path: str, password: str = "") -> dict:
         with self._lock:
             self._ensure_unlocked()
             from . import excelio
 
+            if password and len(password) < excelio.MIN_WORKBOOK_PASSWORD:
+                raise VaultError(f"Excel 密码至少需要 {excelio.MIN_WORKBOOK_PASSWORD} 位")
             page = self._page_row(page_id)
             cols = [c for c in self.get_columns(page_id, include_hidden=True) if c["visible"]]
             rows = self.conn.execute(
@@ -2133,8 +2135,8 @@ class VaultService:
             for row in rows:
                 data = _loads(row["data"], {})
                 plain_rows.append(self._decrypt_data(data, cols))
-            count = excelio.write_export(path, cols, plain_rows, page["name"])
-            return {"ok": True, "count": count, "path": path}
+            count = excelio.write_export(path, cols, plain_rows, page["name"], password=password)
+            return {"ok": True, "count": count, "path": path, "sealed": bool(password)}
 
     def export_excel_template(self, page_id: int, path: str) -> dict:
         with self._lock:

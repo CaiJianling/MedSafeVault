@@ -190,6 +190,12 @@ interface InternalHistory extends HistoryItem {
 }
 
 const demoMode = new URLSearchParams(window.location.search).get('demo')
+// ?demo=1&excel=locked shows the password prompt for an import, mirroring a
+// workbook saved with an opening password.
+const demoExcelLocked = new URLSearchParams(window.location.search).get('excel') === 'locked'
+const DEMO_EXCEL_PASSWORD = 'Excel#2026secret'
+const DEMO_EXCEL_FILE = 'C:\\Users\\CaiJianling\\Desktop\\服务器清单.xlsx'
+const DEMO_EXCEL_LOCKED_FILE = 'C:\\Users\\CaiJianling\\Desktop\\加密清单.xlsx'
 
 let initialized = demoMode !== 'setup'
 let locked = demoMode === 'setup' || demoMode === 'locked'
@@ -949,6 +955,26 @@ function pageById(pageId: number): MockPage | undefined {
   return pages.find((p) => p.id === pageId)
 }
 
+function demoExcelPreview(page: MockPage, path = DEMO_EXCEL_FILE): ExcelPreview {
+  const visible = publicColumns(page).filter((column) => column.visible)
+  return {
+    headers: visible.map((column) => column.label),
+    mapped: visible.map((column) => ({
+      key: column.key,
+      label: column.label,
+      header: column.label,
+    })),
+    unmatched: [],
+    rows: 6,
+    samples: [
+      Object.fromEntries(visible.map((column) => [column.key, column.masked ? MASK : `示例${column.label}`])),
+      Object.fromEntries(visible.map((column) => [column.key, column.masked ? MASK : '—'])),
+    ],
+    path,
+    page_id: page.id,
+  }
+}
+
 function titleFor(record: MockRecord, columns: Column[]): string {
   for (const key of ['app', 'name', 'title', 'address', 'host']) {
     if (record.data[key]) return record.data[key]
@@ -1562,25 +1588,17 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         requireUnlocked()
         const page = pageById(Number(args[0]))
         if (!page) throw new Error('页面不存在')
-        const visible = publicColumns(page).filter((column) => column.visible)
-        return {
-          preview: {
-            headers: visible.map((column) => column.label),
-            mapped: visible.map((column) => ({
-              key: column.key,
-              label: column.label,
-              header: column.label,
-            })),
-            unmatched: [],
-            rows: 6,
-            samples: [
-              Object.fromEntries(visible.map((column) => [column.key, column.masked ? MASK : `示例${column.label}`])),
-              Object.fromEntries(visible.map((column) => [column.key, column.masked ? MASK : '—'])),
-            ],
-            path: 'C:\\Users\\CaiJianling\\Desktop\\服务器清单.xlsx',
-            page_id: page.id,
-          } satisfies ExcelPreview,
+        if (demoExcelLocked) return { locked: true, path: DEMO_EXCEL_LOCKED_FILE }
+        return { preview: demoExcelPreview(page) }
+      }
+      case 'preview_excel_file': {
+        requireUnlocked()
+        const page = pageById(Number(args[0]))
+        if (!page) throw new Error('页面不存在')
+        if (String(args[2] || '') !== DEMO_EXCEL_PASSWORD) {
+          throw new Error('Excel 打开密码不正确')
         }
+        return { preview: demoExcelPreview(page, String(args[1] || DEMO_EXCEL_LOCKED_FILE)) }
       }
       case 'import_excel': {
         requireUnlocked()
@@ -1608,13 +1626,19 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         ])
         return { ok: true, count: 3 }
       }
-      case 'export_excel':
+      case 'export_excel': {
         requireUnlocked()
+        const workbookPassword = String(args[1] || '')
+        if (workbookPassword && workbookPassword.length < 8) {
+          throw new Error('Excel 密码至少需要 8 位')
+        }
         return {
           ok: true,
           count: records.filter((record) => record.page_id === Number(args[0]) && !record.deleted_at).length,
           path: 'C:\\Users\\CaiJianling\\Desktop\\导出结果.xlsx',
+          sealed: Boolean(workbookPassword),
         }
+      }
       case 'export_template':
         return { ok: true, path: 'C:\\Users\\CaiJianling\\Desktop\\导入模板.xlsx' }
       case 'export_backup': {

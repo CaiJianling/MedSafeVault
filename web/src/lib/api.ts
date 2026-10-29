@@ -276,11 +276,25 @@ export const api = {
     call<{ mode: string; target: string; message: string }>('connect', recordId, mode),
 
   previewExcel: (pageId: number) =>
-    call<{ cancelled?: boolean; preview?: ExcelPreview }>('preview_excel', pageId),
-  importExcel: (pageId: number, path: string) =>
-    call<{ count: number }>('import_excel', pageId, path),
-  exportExcel: (pageId: number) =>
-    call<{ cancelled?: boolean; path?: string; count?: number }>('export_excel', pageId),
+    call<{ cancelled?: boolean; locked?: boolean; path?: string; preview?: ExcelPreview }>(
+      'preview_excel',
+      pageId,
+    ),
+  previewExcelFile: (pageId: number, path: string, password: string) =>
+    call<{ locked?: boolean; path?: string; preview?: ExcelPreview }>(
+      'preview_excel_file',
+      pageId,
+      path,
+      password,
+    ),
+  importExcel: (pageId: number, path: string, password = '') =>
+    call<{ count: number }>('import_excel', pageId, path, password),
+  exportExcel: (pageId: number, password = '') =>
+    call<{ cancelled?: boolean; path?: string; count?: number; sealed?: boolean }>(
+      'export_excel',
+      pageId,
+      password,
+    ),
   exportTemplate: (pageId: number) =>
     call<{ cancelled?: boolean; path?: string }>('export_template', pageId),
 
