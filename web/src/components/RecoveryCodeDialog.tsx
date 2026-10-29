@@ -187,7 +187,7 @@ export function RecoveryCodeDialog({
             type="checkbox"
             checked={acknowledged}
             onChange={(event) => setAcknowledged(event.target.checked)}
-            className="mt-0.5 size-3.5 accent-teal-400"
+            className="msv-check mt-0.5"
           />
           <span className="text-[0.71875rem] leading-relaxed text-ice-400">
             {t(

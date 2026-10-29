@@ -177,16 +177,8 @@ export function TerminalOverlay({
       )}
       aria-hidden={phase === 'closed' || phase === 'closing'}
     >
-      {/* Scrim fades while the workspace surface itself grows/shrinks, so the
-          opening reads as a ripple from the trigger instead of a black disc. */}
-      <div
-        aria-hidden="true"
-        className={cn(
-          'absolute inset-0 bg-[#03060c]/80 backdrop-blur-sm',
-          phase === 'opening' && 'terminal-scrim-in',
-          phase === 'closing' && 'terminal-scrim-out',
-        )}
-      />
+      {/* No dimming scrim: the workspace grows straight out of the trigger,
+          so the page stays visible in the gutter around the panel. */}
       <div
         className={cn(
           'absolute inset-0 flex flex-col p-0 sm:p-3',

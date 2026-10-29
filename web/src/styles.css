@@ -1030,26 +1030,6 @@
   to { clip-path: circle(0px at var(--msv-rip-x) var(--msv-rip-y)); }
 }
 
-/* The dim layer fades on its own: the growing circle is the panel surface,
-   not a black dot that later turns into a panel. */
-.terminal-scrim-in {
-  animation: terminal-scrim-in 200ms ease-out both;
-}
-
-.terminal-scrim-out {
-  animation: terminal-scrim-out 280ms ease-in both;
-}
-
-@keyframes terminal-scrim-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes terminal-scrim-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
 /* The panel joins the ripple with a restrained lift instead of a full zoom. */
 .terminal-panel-in {
   animation: terminal-panel-in 340ms cubic-bezier(0.2, 0, 0, 1) both;

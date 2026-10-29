@@ -1060,7 +1060,7 @@ export function SettingsDialog({
                   <label className="flex cursor-pointer items-center gap-2 text-[0.71875rem] text-ice-500">
                     <input
                       type="checkbox"
-                      className="size-3.5 accent-[var(--msv-accent)]"
+                      className="msv-check"
                       checked={showPassword}
                       onChange={(event) => setShowPassword(event.target.checked)}
                     />
