@@ -4,10 +4,12 @@ import type {
   AboutInfo,
   BackupInfo,
   Bootstrap,
+  ConnectResult,
   DataLocation,
   EnvironmentInfo,
   ExcelPreview,
   HistoryList,
+  LocalListing,
   Page,
   PageTemplate,
   PendingLocation,
@@ -16,6 +18,8 @@ import type {
   RecycleList,
   RecoveryInfo,
   RecoveryStatus,
+  RemoteListing,
+  SessionInfo,
   Settings,
   StateInfo,
   UndoState,
@@ -272,8 +276,47 @@ export const api = {
   emptyRecycle: () =>
     call<{ ok: boolean; pages: number; records: number }>('empty_recycle'),
 
-  connect: (recordId: number, mode?: string) =>
-    call<{ mode: string; target: string; message: string }>('connect', recordId, mode),
+  connect: (recordId: number, mode = '') =>
+    call<ConnectResult>('connect', recordId, mode),
+
+  // Built-in sessions (SSH terminal, FTP/SFTP browser, VNC relay).
+  terminalList: () => call<{ sessions: SessionInfo[] }>('terminal_list'),
+  terminalRead: (sessionId: string, cursor: number) =>
+    call<{ data: string; cursor: number; closed: boolean; error: string }>(
+      'terminal_read',
+      sessionId,
+      cursor,
+    ),
+  terminalWrite: (sessionId: string, data: string) =>
+    call<{ ok: boolean }>('terminal_write', sessionId, data),
+  terminalResize: (sessionId: string, cols: number, rows: number) =>
+    call<{ ok: boolean }>('terminal_resize', sessionId, cols, rows),
+  sessionClose: (sessionId: string) =>
+    call<{ ok: boolean }>('session_close', sessionId),
+  filesList: (sessionId: string, path = '') =>
+    call<RemoteListing>('files_list', sessionId, path),
+  filesMkdir: (sessionId: string, path: string) =>
+    call<{ ok: boolean }>('files_mkdir', sessionId, path),
+  filesRemove: (sessionId: string, path: string, isDir: boolean) =>
+    call<{ ok: boolean }>('files_remove', sessionId, path, isDir),
+  filesRename: (sessionId: string, oldPath: string, newPath: string) =>
+    call<{ ok: boolean }>('files_rename', sessionId, oldPath, newPath),
+  filesDownload: (sessionId: string, remote: string, filename = '') =>
+    call<{ cancelled?: boolean; saved?: string; name?: string }>(
+      'files_download',
+      sessionId,
+      remote,
+      filename,
+    ),
+  filesUpload: (sessionId: string, remoteDir: string) =>
+    call<{ cancelled?: boolean; uploaded?: string; name?: string }>(
+      'files_upload',
+      sessionId,
+      remoteDir,
+    ),
+  localList: (path = '') => call<{ listing: LocalListing }>('local_list', path),
+  rdpFocus: (pid: number) => call<{ focused: boolean }>('rdp_focus', pid),
+  rdpClose: (pid: number) => call<{ closed: boolean }>('rdp_close', pid),
 
   previewExcel: (pageId: number) =>
     call<{ cancelled?: boolean; locked?: boolean; path?: string; preview?: ExcelPreview }>(
@@ -317,6 +360,8 @@ export const api = {
     call<{ settings: Settings }>('set_settings', patch),
   chooseSecurecrt: () =>
     call<{ cancelled?: boolean; settings?: Settings }>('choose_securecrt'),
+  chooseProgram: (key: string) =>
+    call<{ cancelled?: boolean; settings?: Settings; path?: string }>('choose_program', key),
   getAbout: () => call<{ about: AboutInfo }>('get_about'),
   openDataDir: () => call<{ ok: boolean }>('open_data_dir'),
   openPath: (path: string) => call<{ ok: boolean }>('open_path', path),
@@ -333,6 +378,12 @@ export const api = {
   cancelDataLocation: () => call<{ pending: null }>('cancel_data_location'),
   chooseDataDir: () => call<{ cancelled?: boolean; path?: string }>('choose_data_dir'),
   getEnvironment: () => call<{ environment: EnvironmentInfo }>('get_environment'),
+
+  // Window close: the backend asks first (window.__msvClosePrompt), then the
+  // dialog reports what the user picked.
+  dismissClosePrompt: () => call<{ ok: boolean }>('dismiss_close_prompt'),
+  closeWindow: (action: 'tray' | 'quit', remember: boolean) =>
+    call<{ ok: boolean; hidden?: boolean }>('close_window', action, remember),
 
   quit: () => call<{ ok: boolean }>('quit'),
 }

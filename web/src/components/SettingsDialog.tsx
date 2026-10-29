@@ -68,6 +68,12 @@ import {
 } from '../lib/fonts'
 
 type Tab = 'general' | 'security' | 'data' | 'about'
+type ProgramKey =
+  | 'securecrt_path'
+  | 'putty_path'
+  | 'xshell_path'
+  | 'winscp_path'
+  | 'vnc_viewer_path'
 
 /** Hue ids mirrored by the [data-accent] blocks in styles.css. */
 const ACCENT_OPTIONS: { id: Accent; name: string }[] = [
@@ -337,6 +343,24 @@ export function SettingsDialog({
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword])
 
+  const programRows: { key: ProgramKey; label: string; exe: string; path: string }[] = [
+    {
+      key: 'securecrt_path',
+      label: 'SecureCRT',
+      exe: 'SecureCRT.exe',
+      path: settings.securecrt_path,
+    },
+    { key: 'putty_path', label: 'PuTTY', exe: 'putty.exe', path: settings.putty_path },
+    { key: 'xshell_path', label: 'Xshell', exe: 'Xshell.exe', path: settings.xshell_path },
+    { key: 'winscp_path', label: 'WinSCP', exe: 'WinSCP.exe', path: settings.winscp_path },
+    {
+      key: 'vnc_viewer_path',
+      label: 'VNC Viewer',
+      exe: 'vncviewer.exe',
+      path: settings.vnc_viewer_path,
+    },
+  ]
+
   async function updateSettings(patch: Partial<Settings>, key: string) {
     const previous = settings
     const next = { ...settings, ...patch }
@@ -355,15 +379,15 @@ export function SettingsDialog({
     }
   }
 
-  async function chooseSecurecrt() {
-    setSavingKey('securecrt')
+  async function chooseProgram(key: ProgramKey = 'securecrt_path', label = t('SecureCRT')) {
+    setSavingKey(key)
     try {
-      const result = await api.chooseSecurecrt()
+      const result = await api.chooseProgram(key)
       if (result.cancelled) return
       if (result.settings) {
         setSettings(result.settings)
         onSettings(result.settings)
-        toast.success(t('SecureCRT 路径已更新'))
+        toast.success(t('{name} 路径已更新', { name: label }))
       }
     } catch (error) {
       toast.error(t('无法选择程序'), error instanceof ApiError ? error.message : t('请重试'))
@@ -810,31 +834,163 @@ export function SettingsDialog({
             <Section
               title={t('远程连接')}
               description={t(
-                '仅用于 SSH / Telnet 终端；Windows 服务器会自动使用 mstsc，网页地址使用默认浏览器。',
+                '这些是全局默认值；连接单条记录时，还可以在列表的连接菜单里临时改选方式。',
               )}
             >
               <Row
                 title={
                   <span className="inline-flex items-center gap-1.5">
                     <Terminal className="size-3.5 text-[var(--msv-accent-text)]" />
-                    {t('SecureCRT 路径')}
+                    {t('SSH 连接程序')}
                   </span>
                 }
-                description={
-                  settings.securecrt_path
-                    ? shortPath(settings.securecrt_path, 60)
-                    : t('未配置，将尝试常见安装位置')
-                }
+                description={t('「自动」优先使用内置终端，找不到时再尝试其他已安装程序。')}
               >
-                <button
-                  type="button"
-                  onClick={chooseSecurecrt}
-                  disabled={savingKey === 'securecrt'}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[0.71875rem] text-ice-300 transition hover:border-line-strong hover:bg-[var(--msv-tint)] disabled:opacity-50"
-                >
-                  {savingKey === 'securecrt' ? <Spinner className="size-3" /> : <FolderOpen className="size-3.5" />}
-                  {t('选择程序')}
-                </button>
+                <SelectMenu
+                  ariaLabel={t('SSH 连接程序')}
+                  className="h-8 w-[190px] text-[12px]"
+                  value={settings.ssh_client}
+                  items={[
+                    { value: 'auto' as const, label: t('自动选择') },
+                    { value: 'builtin' as const, label: t('内置终端') },
+                    { value: 'securecrt' as const, label: 'SecureCRT' },
+                    { value: 'putty' as const, label: 'PuTTY' },
+                    { value: 'xshell' as const, label: 'Xshell' },
+                    { value: 'openssh' as const, label: t('Windows 自带 OpenSSH') },
+                  ]}
+                  onChange={(value) => updateSettings({ ssh_client: value }, 'ssh_client')}
+                />
+              </Row>
+              <div className="h-px bg-line/70" />
+              <Row
+                title={t('Telnet 连接程序')}
+                description={t('内置终端只支持 SSH，Telnet 会交给所选外部程序。')}
+              >
+                <SelectMenu
+                  ariaLabel={t('Telnet 连接程序')}
+                  className="h-8 w-[190px] text-[12px]"
+                  value={settings.telnet_client}
+                  items={[
+                    { value: 'auto' as const, label: t('自动选择') },
+                    { value: 'securecrt' as const, label: 'SecureCRT' },
+                    { value: 'putty' as const, label: 'PuTTY' },
+                    { value: 'telnet' as const, label: t('Windows 自带 Telnet') },
+                  ]}
+                  onChange={(value) => updateSettings({ telnet_client: value }, 'telnet_client')}
+                />
+              </Row>
+              <div className="h-px bg-line/70" />
+              <Row
+                title={t('FTP / SFTP 文件传输')}
+                description={t('内置双栏文件管理，或交由 WinSCP 打开。')}
+              >
+                <SelectMenu
+                  ariaLabel={t('FTP / SFTP 文件传输')}
+                  className="h-8 w-[190px] text-[12px]"
+                  value={settings.file_client}
+                  items={[
+                    { value: 'builtin' as const, label: t('内置文件管理') },
+                    { value: 'winscp' as const, label: 'WinSCP' },
+                  ]}
+                  onChange={(value) => updateSettings({ file_client: value }, 'file_client')}
+                />
+              </Row>
+              <div className="h-px bg-line/70" />
+              <Row
+                title={t('VNC 远程桌面')}
+                description={t('内置画布不需要安装客户端；外部模式调用 VNC Viewer。')}
+              >
+                <SelectMenu
+                  ariaLabel={t('VNC 远程桌面')}
+                  className="h-8 w-[190px] text-[12px]"
+                  value={settings.vnc_client}
+                  items={[
+                    { value: 'builtin' as const, label: t('内置画布') },
+                    { value: 'external' as const, label: 'VNC Viewer' },
+                  ]}
+                  onChange={(value) => updateSettings({ vnc_client: value }, 'vnc_client')}
+                />
+              </Row>
+              <div className="h-px bg-line/70" />
+              <Row
+                title={t('RDP 凭据填充')}
+                description={t(
+                  '始终用系统 mstsc 打开；填写密码时会临时写入 Windows 凭据，mstsc 结束后立即删除。',
+                )}
+              >
+                <SelectMenu
+                  ariaLabel={t('RDP 凭据填充')}
+                  className="h-8 w-[190px] text-[12px]"
+                  value={settings.rdp_fill}
+                  items={[
+                    { value: 'user' as const, label: t('仅用户名') },
+                    { value: 'password' as const, label: t('用户名和密码') },
+                    { value: 'none' as const, label: t('不填充') },
+                  ]}
+                  onChange={(value) => updateSettings({ rdp_fill: value }, 'rdp_fill')}
+                />
+              </Row>
+            </Section>
+
+            <Section
+              title={t('外部程序路径')}
+              description={t('留空时会在注册表与常见安装位置查找；找不到才会回退到内置功能。')}
+            >
+              {programRows.map((item, index) => (
+                <div key={item.key}>
+                  {index > 0 && <div className="h-px bg-line/70" />}
+                  <Row
+                    title={item.label}
+                    description={
+                      item.path ? shortPath(item.path, 60) : t('未配置，将自动查找 {exe}', { exe: item.exe })
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => chooseProgram(item.key, item.label)}
+                      disabled={savingKey === item.key}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[0.71875rem] text-ice-300 transition hover:border-line-strong hover:bg-[var(--msv-tint)] disabled:opacity-50"
+                    >
+                      {savingKey === item.key ? (
+                        <Spinner className="size-3" />
+                      ) : (
+                        <FolderOpen className="size-3.5" />
+                      )}
+                      {t('选择程序')}
+                    </button>
+                  </Row>
+                </div>
+              ))}
+            </Section>
+
+            <Section
+              title={t('关闭按钮')}
+              description={t('点击窗口右上角的关闭按钮时，默认怎么处理这个窗口。')}
+            >
+              <Row
+                title={t('关闭方式')}
+                description={t('最小化后程序继续在后台运行，远程连接也会保持。')}
+              >
+                <SelectMenu
+                  ariaLabel={t('关闭方式')}
+                  className="h-8 w-[190px] text-[12px]"
+                  value={settings.close_action}
+                  items={[
+                    { value: 'tray' as const, label: t('最小化到小图标区') },
+                    { value: 'quit' as const, label: t('直接退出程序') },
+                  ]}
+                  onChange={(value) => updateSettings({ close_action: value }, 'close_action')}
+                />
+              </Row>
+              <div className="h-px bg-line/70" />
+              <Row
+                title={t('每次关闭时询问')}
+                description={t('关闭后小图标出现在任务栏通知区域，右键可打开、锁定或退出。')}
+              >
+                <Switch
+                  checked={settings.close_confirm}
+                  onChange={(checked) => updateSettings({ close_confirm: checked }, 'close_confirm')}
+                />
               </Row>
             </Section>
           </div>

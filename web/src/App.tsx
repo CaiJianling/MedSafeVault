@@ -5,9 +5,10 @@ import { ApiError, api, setLockedListener } from './lib/api'
 import { ConfirmProvider } from './lib/confirm'
 import { translateServerText, useI18n } from './lib/i18n'
 import { toast, Toaster } from './lib/toast'
-import type { Page, PageTemplate, StateInfo, UndoState } from './lib/types'
+import type { ConnectResult, Page, PageTemplate, StateInfo, UndoState } from './lib/types'
 import { isEditableTarget, throttle } from './lib/utils'
 import { BrandMark } from './components/Brand'
+import { CloseDialog } from './components/CloseDialog'
 import { Header } from './components/Header'
 import { HelpDrawer } from './components/HelpDrawer'
 import { HistoryDrawer } from './components/HistoryDrawer'
@@ -19,6 +20,7 @@ import { RecoveryDialog } from './components/RecoveryDialog'
 import { RecordsPane } from './components/RecordsPane'
 import { SettingsDialog } from './components/SettingsDialog'
 import { SetupScreen } from './components/SetupScreen'
+import { TerminalOverlay, type TerminalTab } from './components/TerminalOverlay'
 import { Spinner } from './components/primitives'
 
 type Phase = 'boot' | 'error' | 'setup' | 'locked' | 'ready'
@@ -100,6 +102,10 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
+  const [tabs, setTabs] = useState<TerminalTab[]>([])
+  const [activeTab, setActiveTab] = useState<string | null>(null)
+  const [terminalOpen, setTerminalOpen] = useState(false)
+  const [closePromptOpen, setClosePromptOpen] = useState(false)
 
   const themeMode = (theme === 'light' || theme === 'dark' ? theme : 'system') as ThemeMode
 
@@ -165,6 +171,65 @@ export default function App() {
     setRecoveryOpen(false)
   }, [])
 
+  // The backend cannot open a React dialog itself, so clicking the window X
+  // calls this hook (see Api.on_window_closing).
+  useEffect(() => {
+    window.__msvClosePrompt = () => setClosePromptOpen(true)
+    return () => {
+      window.__msvClosePrompt = undefined
+    }
+  }, [])
+
+  const handleConnectResult = useCallback((result: ConnectResult) => {
+    if (result.transport === 'builtin' && result.session_id) {
+      const kind: TerminalTab['kind'] =
+        result.kind === 'files' || result.kind === 'vnc' ? result.kind : 'ssh'
+      const tab: TerminalTab = {
+        key: result.session_id,
+        kind,
+        protocol: (result.protocol || result.mode || kind).toUpperCase(),
+        title: result.title || result.target,
+        target: result.target,
+        sessionId: result.session_id,
+        wsUrl: result.ws_url,
+        credentials: result.credentials,
+      }
+      setTabs((current) => [...current.filter((item) => item.key !== tab.key), tab])
+      setActiveTab(tab.key)
+      setTerminalOpen(true)
+      return
+    }
+    if (result.transport === 'window' && result.pid != null) {
+      // mstsc owns its own window; the tab keeps it one click away.
+      const tab: TerminalTab = {
+        key: `rdp-${result.pid}`,
+        kind: 'rdp',
+        protocol: 'RDP',
+        title: result.title || result.target,
+        target: result.target,
+        pid: result.pid,
+      }
+      setTabs((current) => [...current.filter((item) => item.key !== tab.key), tab])
+    }
+  }, [])
+
+  const closeTerminalTab = useCallback((tab: TerminalTab) => {
+    if (tab.sessionId) void api.sessionClose(tab.sessionId).catch(() => undefined)
+    else if (tab.pid != null) void api.rdpClose(tab.pid).catch(() => undefined)
+    setTabs((current) => current.filter((item) => item.key !== tab.key))
+    setActiveTab((current) => (current === tab.key ? null : current))
+  }, [])
+
+  const closeAllTerminalTabs = useCallback(() => {
+    for (const tab of tabs) {
+      if (tab.sessionId) void api.sessionClose(tab.sessionId).catch(() => undefined)
+      else if (tab.pid != null) void api.rdpClose(tab.pid).catch(() => undefined)
+    }
+    setTabs([])
+    setActiveTab(null)
+    setTerminalOpen(false)
+  }, [tabs])
+
   const handleSessionLocked = useCallback(() => {
     setState((previous) =>
       previous
@@ -176,6 +241,9 @@ export default function App() {
     setActiveId(null)
     setRemaining(0)
     setUndoState(null)
+    setTabs([])
+    setActiveTab(null)
+    setTerminalOpen(false)
     closeOverlays()
   }, [closeOverlays])
 
@@ -388,6 +456,9 @@ export default function App() {
       setActiveId(null)
       setRemaining(0)
       setUndoState(null)
+      setTabs([])
+      setActiveTab(null)
+      setTerminalOpen(false)
       closeOverlays()
     } catch (error) {
       toast.error(t('锁定失败'), error instanceof ApiError ? error.message : t('请重试'))
@@ -452,6 +523,9 @@ export default function App() {
           onSettings={() => setSettingsOpen(true)}
           onHelp={() => setHelpOpen(true)}
           onLock={lockNow}
+          sessionCount={tabs.length}
+          terminalOpen={terminalOpen}
+          onTerminal={() => setTerminalOpen((value) => !value)}
         />
 
         <PageTabs
@@ -478,6 +552,7 @@ export default function App() {
               onChanged={notifyChanged}
               onEditPage={() => setPageDialog('edit')}
               onAddPage={() => setPageDialog('create')}
+              onConnectResult={handleConnectResult}
             />
           )}
         </main>
@@ -539,6 +614,16 @@ export default function App() {
             void loadWorkspace()
           }}
         />
+
+        <TerminalOverlay
+          open={terminalOpen}
+          tabs={tabs}
+          activeKey={activeTab}
+          onActive={setActiveTab}
+          onCollapse={() => setTerminalOpen(false)}
+          onCloseTab={closeTerminalTab}
+          onCloseAll={closeAllTerminalTabs}
+        />
       </div>
     )
   }
@@ -563,6 +648,11 @@ export default function App() {
               }
             : undefined
         }
+      />
+      <CloseDialog
+        open={closePromptOpen}
+        onOpenChange={setClosePromptOpen}
+        defaultAction={state?.settings.close_action ?? 'tray'}
       />
       <Toaster />
     </ConfirmProvider>

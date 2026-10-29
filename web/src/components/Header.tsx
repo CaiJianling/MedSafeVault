@@ -8,6 +8,7 @@ import {
   Redo2,
   Settings2,
   ShieldCheck,
+  SquareTerminal,
   Sun,
   Timer,
   Trash2,
@@ -106,6 +107,9 @@ export function Header({
   onSettings,
   onHelp,
   onLock,
+  onTerminal,
+  sessionCount,
+  terminalOpen,
 }: {
   state: StateInfo
   remaining: number | null
@@ -121,6 +125,9 @@ export function Header({
   onSettings: () => void
   onHelp: () => void
   onLock: () => void
+  onTerminal: () => void
+  sessionCount: number
+  terminalOpen: boolean
 }) {
   const { t } = useI18n()
   const themeLabel =
@@ -193,6 +200,33 @@ export function Header({
       <IconButton label={t('回收站')} tip={t('回收站')} tipDown onPress={onRecycle}>
         <Trash2 className="size-4" />
       </IconButton>
+      <Tip
+        down
+        text={
+          sessionCount > 0
+            ? t('连接终端 · {n} 个标签页', { n: sessionCount })
+            : t('连接终端')
+        }
+      >
+        <button
+          type="button"
+          aria-label={t('连接终端')}
+          onClick={onTerminal}
+          className={cn(
+            'relative grid size-8 place-items-center rounded-lg transition hover:bg-[var(--msv-tint-strong)]',
+            terminalOpen
+              ? 'bg-[var(--msv-accent-soft)] text-[var(--msv-accent-text)]'
+              : 'text-ice-500 hover:text-ice-200',
+          )}
+        >
+          <SquareTerminal className="size-4" />
+          {sessionCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-teal-400 px-1 font-mono text-[0.59375rem] font-semibold leading-none text-[#041311]">
+              {sessionCount > 99 ? '99+' : sessionCount}
+            </span>
+          )}
+        </button>
+      </Tip>
       <IconButton label={t('设置')} tip={t('设置')} tipDown onPress={onSettings}>
         <Settings2 className="size-4" />
       </IconButton>

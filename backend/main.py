@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 import os
 import sys
+import threading
 import traceback
 from pathlib import Path
 
@@ -15,9 +16,12 @@ from backend import __version__, paths
 from backend.api import Api
 from backend.paths import data_dir, log_path, resource_path, web_dir
 from backend.store import VaultService
+from backend.tray import TrayIcon
 
 log = logging.getLogger("medsafe")
 _MUTEX_HANDLE = None
+_SHOW_EVENT = None
+_SHOW_EVENT_NAME = "MedSafeVault.ShowWindow.v2"
 
 
 def setup_logging() -> None:
@@ -51,6 +55,85 @@ def ensure_single_instance() -> bool:
     return True
 
 
+def create_show_event() -> None:
+    """Named event that a second launch uses to bring the window back."""
+    global _SHOW_EVENT
+    if os.name != "nt":
+        return
+    try:
+        _SHOW_EVENT = ctypes.windll.kernel32.CreateEventW(
+            None, False, False, _SHOW_EVENT_NAME
+        )
+    except Exception:
+        _SHOW_EVENT = None
+
+
+def signal_existing_instance() -> bool:
+    """Ask the already running copy to show its window (e.g. from the tray)."""
+    if os.name != "nt":
+        return False
+    try:
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenEventW(0x0002, False, _SHOW_EVENT_NAME)  # EVENT_MODIFY_STATE
+        if not handle:
+            return False
+        try:
+            return bool(kernel32.SetEvent(handle))
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return False
+
+
+def watch_show_event(window: webview.Window, api: Api) -> None:
+    """Background thread: show the hidden window when an event arrives."""
+    if not _SHOW_EVENT:
+        return
+
+    def loop() -> None:
+        try:
+            while True:
+                result = ctypes.windll.kernel32.WaitForSingleObject(_SHOW_EVENT, 0xFFFFFFFF)
+                if result != 0:  # WAIT_OBJECT_0
+                    return
+                try:
+                    api.show_window()
+                except Exception:
+                    log.debug("show from second instance failed", exc_info=True)
+        except Exception:
+            log.debug("show-event watcher stopped", exc_info=True)
+
+    threading.Thread(target=loop, name="show-event", daemon=True).start()
+
+
+def fit_window_to_screen(window: webview.Window) -> None:
+    """Shrink the default window when the desktop (or its scale) is smaller.
+
+    1460x930 is comfortable on a 1920x1200 desktop, but at 125% scaling a
+    1366x768 laptop only has about 1093x614 to give — the bottom bar would sit
+    behind the taskbar. Runs on the start() worker thread, so resize() is safe.
+    """
+    try:
+        screens = webview.screens
+    except Exception:
+        return
+    if not screens:
+        return
+    screen = screens[0]
+    frame = getattr(screen, "frame", None)
+    avail_w = int(getattr(frame, "Width", 0) or screen.width)
+    avail_h = int(getattr(frame, "Height", 0) or screen.height)
+    width = max(1140, min(1460, avail_w - 40))
+    height = max(700, min(930, avail_h - 40))
+    if width >= 1460 and height >= 930:
+        return
+    try:
+        window.resize(width, height)
+        log.info("window resized to %sx%s (screen %sx%s)", width, height, avail_w, avail_h)
+    except Exception:
+        log.debug("window resize failed", exc_info=True)
+
+
 def message_box(title: str, text: str, error: bool = False) -> None:
     try:
         flags = 0x10 if error else 0x40
@@ -64,8 +147,10 @@ def main() -> int:
     log.info("Starting MedSafeVault %s (frozen=%s)", __version__, getattr(sys, "frozen", False))
     log.info("Config file: %s", paths.config_path())
     if not ensure_single_instance():
-        message_box("MedSafeVault", "MedSafeVault 已经在运行中。\n请在任务栏中找到已打开的窗口。")
+        if not signal_existing_instance():
+            message_box("MedSafeVault", "MedSafeVault 已经在运行中。\n请在任务栏或小图标区中找到已打开的窗口。")
         return 1
+    create_show_event()
     try:
         if os.name == "nt":
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MedSafeVault.App.2")
@@ -95,6 +180,17 @@ def main() -> int:
     api = Api(service)
     icon_path = resource_path("assets/app.ico")
     debug = os.environ.get("MSV_DEBUG", "").strip() in ("1", "true", "yes")
+    if debug:
+        # Dev only: expose the WebView2 inspector so UI tests can drive the
+        # real window over CDP (MSV_DEBUG_PORT defaults to 9222).
+        try:
+            webview.settings["REMOTE_DEBUGGING_PORT"] = int(
+                os.environ.get("MSV_DEBUG_PORT", "9222")
+            )
+            # The inspector window would cover the app during screenshot tests.
+            webview.settings["OPEN_DEVTOOLS_IN_DEBUG"] = False
+        except (KeyError, ValueError):
+            log.warning("invalid MSV_DEBUG_PORT, remote debugging stays off")
 
     # pywebview 6 keeps the serving/storage options on start(); create_window()
     # only takes window geometry, behaviour and the js_api bridge.
@@ -113,8 +209,27 @@ def main() -> int:
         message_box("MedSafeVault 启动失败", "无法创建应用窗口。", error=True)
         return 1
     api._attach(window)
+    window.events.closing += lambda: api.on_window_closing()
+
+    tray = None
+    try:
+        tray = TrayIcon(
+            str(icon_path) if icon_path.exists() else "",
+            api.show_window,
+            api.tray_lock,
+            api.tray_quit,
+        )
+        tray.start()
+        api._attach_tray(tray)
+    except Exception:
+        log.exception("Tray icon is unavailable; the close button will quit instead")
+        tray = None
+    watch_show_event(window, api)
+
     try:
         webview.start(
+            func=fit_window_to_screen,
+            args=(window,),
             debug=debug,
             http_server=not dev_url,
             private_mode=False,
@@ -127,6 +242,8 @@ def main() -> int:
         message_box("MedSafeVault 运行错误", traceback.format_exc(), error=True)
         return 1
     finally:
+        if tray is not None:
+            tray.stop()
         service.close()
         close_file_logging()
         finish_location_move()

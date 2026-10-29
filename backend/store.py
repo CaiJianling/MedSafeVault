@@ -79,6 +79,12 @@ HISTORY_UNDONE = 1
 HISTORY_DISCARDED = 2
 
 COLUMN_TYPES = ("text", "password", "number", "select", "textarea", "date", "url")
+CONNECT_MODES = ("auto", "ssh", "rdp", "telnet", "ftp", "sftp", "vnc")
+SSH_CLIENTS = ("auto", "builtin", "securecrt", "putty", "xshell", "openssh")
+TELNET_CLIENTS = ("auto", "securecrt", "putty", "telnet")
+FILE_CLIENTS = ("builtin", "winscp")
+VNC_CLIENTS = ("builtin", "external")
+RDP_FILLS = ("user", "password", "none")
 ICONS = (
     "server", "network", "database", "app", "cloud", "shield",
     "key", "grid", "terminal", "globe", "lock", "folder",
@@ -365,6 +371,17 @@ class VaultService:
             "auto_lock_minutes": 5,
             "theme": "system",
             "securecrt_path": "",
+            "putty_path": "",
+            "xshell_path": "",
+            "winscp_path": "",
+            "vnc_viewer_path": "",
+            "ssh_client": "auto",
+            "telnet_client": "auto",
+            "file_client": "builtin",
+            "vnc_client": "builtin",
+            "rdp_fill": "user",
+            "close_action": "tray",
+            "close_confirm": True,
             "mask_usernames": False,
             "mask_addresses": False,
             "compact_rows": False,
@@ -391,6 +408,17 @@ class VaultService:
             settings["ui_scale"] = "standard"
         if settings.get("accent") not in ACCENTS:
             settings["accent"] = "blue"
+        for key, allowed in (
+            ("ssh_client", SSH_CLIENTS),
+            ("telnet_client", TELNET_CLIENTS),
+            ("file_client", FILE_CLIENTS),
+            ("vnc_client", VNC_CLIENTS),
+            ("rdp_fill", RDP_FILLS),
+        ):
+            if settings.get(key) not in allowed:
+                settings[key] = defaults[key]
+        if settings.get("close_action") not in ("tray", "quit"):
+            settings["close_action"] = "tray"
         for font_key in ("ui_font", "code_font"):
             try:
                 settings[font_key] = _clean_font_name(settings.get(font_key))
@@ -416,8 +444,32 @@ class VaultService:
                 if patch["theme"] not in ("dark", "light", "system"):
                     raise VaultError("主题无效")
                 settings["theme"] = patch["theme"]
-            if "securecrt_path" in patch:
-                settings["securecrt_path"] = str(patch["securecrt_path"] or "")[:500]
+            for path_key in (
+                "securecrt_path",
+                "putty_path",
+                "xshell_path",
+                "winscp_path",
+                "vnc_viewer_path",
+            ):
+                if path_key in patch:
+                    settings[path_key] = str(patch[path_key] or "")[:500]
+            for key, allowed in (
+                ("ssh_client", SSH_CLIENTS),
+                ("telnet_client", TELNET_CLIENTS),
+                ("file_client", FILE_CLIENTS),
+                ("vnc_client", VNC_CLIENTS),
+                ("rdp_fill", RDP_FILLS),
+            ):
+                if key in patch:
+                    if patch[key] not in allowed:
+                        raise VaultError("连接方式设置无效")
+                    settings[key] = patch[key]
+            if "close_action" in patch:
+                if patch["close_action"] not in ("tray", "quit"):
+                    raise VaultError("关闭行为无效")
+                settings["close_action"] = patch["close_action"]
+            if "close_confirm" in patch:
+                settings["close_confirm"] = bool(patch["close_confirm"])
             if "table_font" in patch:
                 if patch["table_font"] not in ("mono", "sans"):
                     raise VaultError("表格字体无效")
@@ -497,6 +549,14 @@ class VaultService:
             self.pending_dek = None
             self._pending_recovery = None
             self.lock_reason = reason
+        # Terminal sessions were opened with decrypted credentials, so they
+        # must not outlive the vault being unlocked.
+        try:
+            from . import sessions
+
+            sessions.close_all()
+        except Exception:
+            pass
 
     def get_state(self) -> dict:
         with self._lock:
@@ -1417,11 +1477,13 @@ class VaultService:
             page = self._page_row(row["page_id"])
             cols = self._cols_for_page(row["page_id"])
             data = _loads(row["data"], {})
+            values = self._decrypt_data(data, cols)
+            values["connect_mode"] = data.get("connect_mode") or "auto"
             return {
                 "id": row["id"],
                 "page_id": row["page_id"],
                 "page_name": page["name"],
-                "values": self._decrypt_data(data, cols),
+                "values": values,
                 "columns": [self._public_column(c) for c in cols],
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
@@ -1485,7 +1547,12 @@ class VaultService:
             for col in cols:
                 if col.get("required") and not (clean.get(col["key"]) or "").strip():
                     raise VaultError(f"「{col['label']}」不能为空")
+            mode = str(values.get("connect_mode") or "auto").strip().lower()
+            if mode not in CONNECT_MODES:
+                mode = "auto"
             data = self._pack_values(cols, clean)
+            # How to reach this row (SSH/RDP/...), independent of the page columns.
+            data["connect_mode"] = mode
             stamp = now_text()
             with self.conn:
                 if record_id:
@@ -2172,52 +2239,280 @@ class VaultService:
         password = values.get("password") or ""
         port_text = values.get("port") or ""
         os_text = values.get("os") or ""
+        raw = _loads(row["data"], {})
         return {
             "address": address,
             "username": username,
             "password": password,
             "port": port_text,
             "os": os_text,
+            "connect_mode": raw.get("connect_mode") or "auto",
             "page_name": page["name"],
-            "title": self._record_title(_loads(row["data"], {}), cols),
+            "title": self._record_title(raw, cols),
         }
+
+    @staticmethod
+    def _infer_mode(ctx: dict) -> str:
+        from . import remote
+
+        # The port may sit in its own column or be written as host:port.
+        _host, port = remote.split_host_port(ctx.get("address"), ctx.get("port"), 0)
+        if port in (5900, 5901, 5902, 5903):
+            return "vnc"
+        if port == 3389:
+            return "rdp"
+        if port == 21:
+            return "ftp"
+        if port == 23:
+            return "telnet"
+        if port == 22:
+            return "ssh"
+        if remote.is_windows_host(ctx.get("os")):
+            return "rdp"
+        return "ssh"
 
     def connect_record(self, record_id: int, mode: str | None = None) -> dict:
         with self._lock:
             self._ensure_unlocked()
-            from . import remote
-
             ctx = self._connection_context(record_id)
-            address = ctx["address"]
-            if remote.is_web_address(address):
-                remote.open_web(address)
-                return {"ok": True, "mode": "web", "target": address,
-                        "message": f"已在浏览器中打开 {address}"}
-            mode = (mode or "").lower()
-            if not mode:
-                mode = "rdp" if remote.is_windows_host(ctx["os"]) else "ssh"
-            if mode == "rdp":
-                target = remote.launch_rdp(
-                    address, ctx["username"], ctx["port"], str(data_dir() / "tmp")
-                )
-                return {"ok": True, "mode": "rdp", "target": target,
-                        "message": f"已启动远程桌面：{target}"}
             settings = self.get_settings()
-            exe = remote.find_securecrt(settings.get("securecrt_path") or "")
-            if not exe:
-                return {
-                    "ok": False,
-                    "code": "securecrt_missing",
-                    "error": "未找到 SecureCRT，请在设置中指定 SecureCRT.exe 的路径",
-                }
-            target = remote.launch_ssh(
-                exe, address, ctx["username"], ctx["password"], ctx["port"]
+        return self._launch_connection(ctx, settings, mode)
+
+    def _launch_connection(self, ctx: dict, settings: dict, mode: str | None) -> dict:
+        from . import remote, sessions
+
+        address = ctx["address"]
+        requested = (mode or "").strip().lower()
+        if requested not in ("", "auto") and requested not in CONNECT_MODES:
+            raise VaultError("不支持的连接方式")
+
+        if remote.is_web_address(address) and requested in ("", "auto"):
+            remote.open_web(address)
+            return {"ok": True, "mode": "web", "transport": "browser",
+                    "target": address, "message": f"已在浏览器中打开 {address}"}
+
+        if requested in ("", "auto"):
+            requested = ctx.get("connect_mode") or "auto"
+        if requested == "auto":
+            requested = self._infer_mode(ctx)
+        chosen = requested
+        title = f"{ctx['title']} · {chosen.upper()}"
+
+        if chosen == "rdp":
+            result = remote.launch_rdp(
+                address,
+                ctx["username"],
+                ctx["port"],
+                str(data_dir() / "tmp"),
+                settings.get("rdp_fill") or "user",
+                ctx["password"],
             )
-            if settings.get("securecrt_path") != exe:
-                settings["securecrt_path"] = exe
-                self._save_settings(settings)
-            return {"ok": True, "mode": "ssh", "target": target,
-                    "message": f"已启动 SecureCRT：{target}"}
+            return {"ok": True, "mode": "rdp", "transport": "window",
+                    "target": result["target"], "pid": result["pid"],
+                    "title": title,
+                    "message": f"已打开远程桌面：{result['target']}"}
+
+        if chosen == "ssh":
+            client = settings.get("ssh_client") or "auto"
+            securecrt = remote.find_securecrt(settings.get("securecrt_path") or "")
+            if client == "auto":
+                client = "securecrt" if securecrt else "builtin"
+            if client == "builtin":
+                host, port = remote.split_host_port(address, ctx["port"], 22)
+                info = sessions.open_ssh(
+                    host, port, ctx["username"], ctx["password"], title
+                )
+                return {"ok": True, "mode": "ssh", "transport": "builtin",
+                        "target": f"{host}:{port}", "title": title, **info,
+                        "message": f"内置终端已连接：{host}:{port}"}
+            exe = securecrt if client == "securecrt" else remote.find_program(
+                settings.get(f"{client}_path") or "", client
+            )
+            if not exe:
+                raise VaultError(
+                    f"未找到 {self._client_label(client)}，请在设置中指定程序路径"
+                )
+            target = remote.launch_client(
+                client, exe, address, ctx["username"], ctx["password"], ctx["port"]
+            )
+            return {"ok": True, "mode": "ssh", "transport": "external",
+                    "target": target, "title": title,
+                    "message": f"已启动 {self._client_label(client)}：{target}"}
+
+        if chosen == "telnet":
+            client = settings.get("telnet_client") or "auto"
+            if client == "auto":
+                if remote.find_securecrt(settings.get("securecrt_path") or ""):
+                    client = "securecrt"
+                elif remote.find_program(settings.get("putty_path") or "", "putty"):
+                    client = "putty"
+                else:
+                    client = "telnet"
+            exe = (remote.find_securecrt(settings.get("securecrt_path") or "")
+                   if client == "securecrt"
+                   else remote.find_program(
+                       settings.get(f"{client}_path") or "", client))
+            if not exe:
+                raise VaultError(
+                    f"未找到 {self._client_label(client)}，请在设置中指定程序路径"
+                )
+            target = remote.launch_client(
+                client, exe, address, ctx["username"], ctx["password"],
+                ctx["port"], "telnet",
+            )
+            return {"ok": True, "mode": "telnet", "transport": "external",
+                    "target": target, "title": title,
+                    "message": f"已启动 {self._client_label(client)}：{target}"}
+
+        if chosen in ("ftp", "sftp"):
+            if settings.get("file_client") == "winscp":
+                exe = remote.find_program(settings.get("winscp_path") or "", "winscp")
+                if exe:
+                    target = remote.launch_winscp(
+                        exe, chosen, address, ctx["username"], ctx["password"],
+                        ctx["port"],
+                    )
+                    return {"ok": True, "mode": chosen, "transport": "external",
+                            "target": target, "title": title,
+                            "message": f"已启动 WinSCP：{target}"}
+            host, port = remote.split_host_port(
+                address, ctx["port"], 22 if chosen == "sftp" else 21
+            )
+            info = sessions.open_files(
+                chosen, host, port, ctx["username"], ctx["password"], title
+            )
+            return {"ok": True, "mode": chosen, "transport": "builtin",
+                    "target": f"{host}:{port}", "title": title, **info,
+                    "message": f"内置{chosen.upper()}已连接：{host}:{port}"}
+
+        if chosen == "vnc":
+            if settings.get("vnc_client") == "external":
+                exe = remote.find_program(settings.get("vnc_viewer_path") or "", "vncviewer")
+                if exe:
+                    target = remote.launch_vnc_viewer(exe, address, ctx["port"])
+                    return {"ok": True, "mode": "vnc", "transport": "external",
+                            "target": target, "title": title,
+                            "message": f"已启动 VNC Viewer：{target}"}
+            host, port = remote.split_host_port(address, ctx["port"], 5900)
+            info = sessions.open_vnc(host, port, title)
+            return {"ok": True, "mode": "vnc", "transport": "builtin",
+                    "target": f"{host}:{port}", "title": title, **info,
+                    "credentials": {"username": ctx["username"],
+                                    "password": ctx["password"]},
+                    "message": f"内置 VNC 已连接：{host}:{port}"}
+
+        raise VaultError("不支持的连接方式")
+
+    @staticmethod
+    def _client_label(client: str) -> str:
+        return {
+            "securecrt": "SecureCRT",
+            "putty": "PuTTY",
+            "xshell": "Xshell",
+            "openssh": "OpenSSH",
+            "telnet": "Telnet",
+            "winscp": "WinSCP",
+            "vncviewer": "VNC Viewer",
+        }.get(client, client)
+
+    # ------------------------------------------------------------ terminals
+    def session_list(self) -> list[dict]:
+        self._ensure_unlocked()
+        from . import sessions
+
+        return sessions.list_info()
+
+    def terminal_read(self, session_id: str, cursor: int = 0) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        session = sessions.get(str(session_id))
+        if not hasattr(session, "read"):
+            raise VaultError("这个会话不是终端")
+        return session.read(int(cursor or 0))
+
+    def terminal_write(self, session_id: str, data: str) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        session = sessions.get(str(session_id))
+        if not hasattr(session, "write"):
+            raise VaultError("这个会话不是终端")
+        session.write(data or "")
+        return {"ok": True}
+
+    def terminal_resize(self, session_id: str, cols: int, rows: int) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        session = sessions.get(str(session_id))
+        resize = getattr(session, "resize", None)
+        if resize:
+            resize(int(cols or 80), int(rows or 24))
+        return {"ok": True}
+
+    def close_session(self, session_id: str) -> dict:
+        from . import sessions
+
+        sessions.close(str(session_id))
+        return {"ok": True}
+
+    def files_list(self, session_id: str, path: str = "") -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        session = sessions.get(str(session_id))
+        if not hasattr(session, "list"):
+            raise VaultError("这个会话不是文件传输")
+        return session.list(path or "")
+
+    def files_mkdir(self, session_id: str, path: str) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        sessions.get(str(session_id)).mkdir(path)
+        return {"ok": True}
+
+    def files_remove(self, session_id: str, path: str, is_dir: bool = False) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        sessions.get(str(session_id)).remove(path, bool(is_dir))
+        return {"ok": True}
+
+    def files_rename(self, session_id: str, old: str, new: str) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        sessions.get(str(session_id)).rename(old, new)
+        return {"ok": True}
+
+    def files_download(self, session_id: str, remote: str, local: str) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        return sessions.get(str(session_id)).download(remote, local)
+
+    def files_upload(self, session_id: str, local: str, remote_dir: str) -> dict:
+        self._ensure_unlocked()
+        from . import sessions
+
+        return sessions.get(str(session_id)).upload(local, remote_dir)
+
+    def local_list(self, path: str = "") -> dict:
+        from . import sessions
+
+        return sessions.local_list(path)
+
+    def rdp_focus(self, pid: int) -> dict:
+        from . import remote
+
+        return {"focused": remote.focus_window(int(pid))}
+
+    def rdp_close(self, pid: int) -> dict:
+        from . import remote
+
+        return {"closed": remote.close_window(int(pid))}
 
     # ---------------------------------------------------------------- backup
     def build_backup(self) -> dict:
@@ -2412,6 +2707,12 @@ class VaultService:
             return {"state": self.get_state(), "info": info, "auto_backup": auto_backup}
 
     def close(self) -> None:
+        try:
+            from . import sessions
+
+            sessions.close_all()
+        except Exception:
+            pass
         with self._lock:
             try:
                 self.conn.close()

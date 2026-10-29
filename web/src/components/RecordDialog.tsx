@@ -2,6 +2,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Link2,
   Lock,
   Save,
   ShieldCheck,
@@ -12,7 +13,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ApiError, api } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
-import type { Column, Page, RecordDetail } from '../lib/types'
+import type { Column, ConnectMode, Page, RecordDetail } from '../lib/types'
 import { cn, formatDateTime, isMonospaceColumn, passwordStrength } from '../lib/utils'
 import { Field, ModalFrame, SelectMenu, Spinner } from './primitives'
 import { SuggestInput } from './SuggestInput'
@@ -24,6 +25,7 @@ function initialValues(columns: Column[]): Values {
   for (const column of columns) {
     values[column.key] = ''
   }
+  values.connect_mode = 'auto'
   return values
 }
 
@@ -81,6 +83,7 @@ export function RecordDialog({
         for (const column of result.record.columns) {
           next[column.key] = result.record.values[column.key] ?? ''
         }
+        next.connect_mode = result.record.values.connect_mode || 'auto'
         setValues(next)
       })
       .catch((err) => {
@@ -182,6 +185,7 @@ export function RecordDialog({
       for (const column of columns) {
         payload[column.key] = String(values[column.key] ?? '')
       }
+      payload.connect_mode = String(values.connect_mode || 'auto')
       await api.saveRecord(page.id, payload, recordId)
       toast.success(
         recordId ? t('记录已更新') : t('记录已添加'),
@@ -263,6 +267,31 @@ export function RecordDialog({
           )}
 
           <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+            <Field
+              className="sm:col-span-2"
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  <Link2 className="size-2.5 text-[var(--msv-accent-text)]" />
+                  {t('连接方式')}
+                </span>
+              }
+              hint={t('连接时默认使用这种方式；选「自动判断」会按端口和操作系统选择 SSH、RDP、FTP 等。')}
+            >
+              <SelectMenu<ConnectMode>
+                ariaLabel={t('连接方式')}
+                value={(values.connect_mode as ConnectMode) || 'auto'}
+                items={[
+                  { value: 'auto', label: t('自动判断（推荐）') },
+                  { value: 'ssh', label: t('SSH 终端') },
+                  { value: 'rdp', label: t('RDP 远程桌面') },
+                  { value: 'telnet', label: t('Telnet 终端') },
+                  { value: 'ftp', label: t('FTP 文件传输') },
+                  { value: 'sftp', label: t('SFTP 文件传输') },
+                  { value: 'vnc', label: t('VNC 远程桌面') },
+                ]}
+                onChange={(next) => update('connect_mode', next)}
+              />
+            </Field>
             {visibleColumns.map((column) => {
               const value = values[column.key] ?? ''
               const isSecret = column.type === 'password' || column.masked

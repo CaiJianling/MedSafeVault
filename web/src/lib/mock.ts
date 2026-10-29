@@ -13,15 +13,19 @@ import type {
   ExcelPreview,
   HistoryItem,
   HistoryList,
+  LocalListing,
   Page,
   PageTemplate,
   RecordDetail,
   RecordList,
   RecycleList,
+  RemoteEntry,
+  RemoteListing,
   Settings,
   StateInfo,
   UndoState,
 } from './types'
+import { translate as t } from './i18n'
 import { passwordStrength, sleep } from './utils'
 
 const MASK = '••••••••'
@@ -211,7 +215,18 @@ let demoPending: { mode: string; path: string; requested_at: string } | null = n
 let settings: Settings = {
   auto_lock_minutes: 5,
   theme: 'system',
-  securecrt_path: 'C:\\Program Files\\VanDyke Software\\Clients\\SecureCRT.exe',
+  securecrt_path: '',
+  putty_path: '',
+  xshell_path: '',
+  winscp_path: '',
+  vnc_viewer_path: '',
+  ssh_client: 'auto',
+  telnet_client: 'auto',
+  file_client: 'builtin',
+  vnc_client: 'builtin',
+  rdp_fill: 'user',
+  close_action: 'tray',
+  close_confirm: true,
   table_font: 'mono',
   ui_scale: 'standard',
   accent: 'blue',
@@ -222,8 +237,115 @@ let settings: Settings = {
   compact_rows: false,
 }
 
-let pages: MockPage[] = [
-  {
+/**
+ * Browser-preview stand-ins for the built-in sessions. They keep an in-memory
+ * transcript / directory tree per tab so the terminal overlay can be reviewed
+ * without a real SSH/FTP server. Desktop builds never use this file.
+ */
+interface MockSession {
+  id: string
+  kind: 'ssh' | 'files' | 'vnc'
+  protocol: string
+  title: string
+  target: string
+  username: string
+  password: string
+  buffer: string
+  pending: string
+  dirs: Record<string, RemoteEntry[]>
+  closed: boolean
+}
+
+let mockSessions: MockSession[] = []
+let mockSessionSeq = 1
+
+function dirEntry(name: string, size: number, isDir = false, daysAgo = 3): RemoteEntry {
+  return { name, is_dir: isDir, size, mtime: Math.floor(Date.now() / 1000) - daysAgo * 86400 }
+}
+
+function demoDirs(protocol: string): Record<string, RemoteEntry[]> {
+  if (protocol === 'FTP') {
+    return {
+      '/': [dirEntry('public', 0, true), dirEntry('upload', 0, true), dirEntry('welcome.txt', 720)],
+      '/public': [dirEntry('notice-2026.txt', 1480), dirEntry('images', 0, true, 6)],
+      '/public/images': [dirEntry('banner.png', 92_400, false, 9)],
+      '/upload': [],
+    }
+  }
+  return {
+    '/': [dirEntry('etc', 0, true, 21), dirEntry('opt', 0, true, 21), dirEntry('var', 0, true, 8)],
+    '/etc': [dirEntry('app.conf', 2140, false, 4), dirEntry('hosts', 380, false, 30)],
+    '/opt': [dirEntry('app', 0, true, 4), dirEntry('backup', 0, true, 12)],
+    '/opt/app': [
+      dirEntry('config', 0, true, 4),
+      dirEntry('logs', 0, true, 1),
+      dirEntry('start.sh', 486, false, 4),
+    ],
+    '/opt/app/config': [dirEntry('application.yml', 3120, false, 2)],
+    '/opt/app/logs': [dirEntry('app-20261028.log', 1_284_000, false, 1)],
+    '/opt/backup': [dirEntry('app-20261027.tar.gz', 42_800_000, false, 2)],
+    '/var': [dirEntry('log', 0, true, 1)],
+    '/var/log': [dirEntry('messages', 96_000, false, 1)],
+  }
+}
+
+function demoLocalDirs(): Record<string, RemoteEntry[]> {
+  return {
+    'C:\\Users\\CaiJianling\\Desktop': [
+      dirEntry('运维记录', 0, true, 2),
+      dirEntry('服务器清单.xlsx', 18_400, false, 5),
+      dirEntry('上线检查表.md', 2_260, false, 1),
+    ],
+    'C:\\Users\\CaiJianling\\Desktop\\运维记录': [
+      dirEntry('2026-10-备份说明.txt', 980, false, 3),
+    ],
+    'C:\\Users\\CaiJianling\\Documents': [dirEntry('演示文稿', 0, true, 8)],
+    'C:\\Users\\CaiJianling\\Documents\\演示文稿': [],
+    'C:\\Users\\CaiJianling\\Downloads': [dirEntry('MedSafeVault-2.0.0.zip', 31_200_000, false, 6)],
+  }
+}
+
+const DEMO_LOCAL_ROOTS = [
+  { name: 'C:', path: 'C:\\' },
+  { name: 'D:', path: 'D:\\' },
+]
+
+function parentPath(path: string): string {
+  if (!path) return ''
+  const normalized = path.replace(/[\\/]+$/, '')
+  const index = Math.max(normalized.lastIndexOf('\\'), normalized.lastIndexOf('/'))
+  if (index <= 0) return normalized.slice(0, index + 1)
+  return normalized.slice(0, index)
+}
+
+function takeSession(sessionId: string): MockSession {
+  const session = mockSessions.find((item) => item.id === sessionId)
+  if (!session) throw new Error('终端会话已关闭')
+  return session
+}
+
+function mockListing(session: MockSession, path: string): RemoteListing {
+  const target = path || '/'
+  const entries = session.dirs[target]
+  if (!entries) throw new Error('无法打开目录')
+  return { path: target, entries: [...entries].sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name)) }
+}
+
+function localListing(path: string): LocalListing {
+  const dirs = demoLocalDirs()
+  if (!path) {
+    return { path: '', parent: '', roots: DEMO_LOCAL_ROOTS, entries: [] }
+  }
+  const entries = dirs[path]
+  if (!entries) throw new Error('无法打开目录')
+  return {
+    path,
+    parent: parentPath(path),
+    entries: [...entries].sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name)),
+  }
+}
+
+let pages: MockPage[] = [  {
     id: 1,
     name: '服务器',
     icon: 'server',
@@ -1579,11 +1701,235 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         requireUnlocked()
         const record = records.find((item) => item.id === Number(args[0]))
         if (!record) throw new Error('记录不存在')
-        const address = record.data.address || record.data.oob || ''
+        const address = (record.data.address || record.data.oob || '').trim()
         if (!address) throw new Error('该记录没有可用于连接的地址')
-        const mode = /^https?:/i.test(address) ? 'web' : /windows/i.test(record.data.os || '') ? 'rdp' : 'ssh'
-        return { ok: true, mode, target: address, message: `已启动${mode === 'web' ? '浏览器' : mode === 'rdp' ? '远程桌面' : ' SecureCRT'}：${address}` }
+        const requested = String(args[1] || '').trim().toLowerCase()
+        if (/^https?:/i.test(address) && !requested) {
+          return {
+            mode: 'web',
+            transport: 'browser',
+            target: address,
+            title: address,
+            message: t('已用默认浏览器打开 {target}', { target: address }),
+          }
+        }
+        let mode = requested && requested !== 'auto' ? requested : record.data.connect_mode || 'auto'
+        if (mode === 'auto') {
+          const port = Number(address.split(':').pop())
+          if ([5900, 5901, 5902, 5903].includes(port)) mode = 'vnc'
+          else if (port === 3389) mode = 'rdp'
+          else if (port === 21) mode = 'ftp'
+          else if (port === 23) mode = 'telnet'
+          else if (port === 22) mode = 'ssh'
+          else if (/windows/i.test(record.data.os || '')) mode = 'rdp'
+          else mode = 'ssh'
+        }
+        const username = record.data.username || ''
+        const password = record.data.password || ''
+        const sshClient =
+          settings.ssh_client === 'auto'
+            ? settings.securecrt_path
+              ? 'securecrt'
+              : 'builtin'
+            : settings.ssh_client
+        if (mode === 'ssh' && sshClient === 'builtin') {
+          const id = `mock-ssh-${mockSessionSeq++}`
+          const prompt = `\u001b[32m${username || 'demo'}@demo-${address.split(':')[0]}\u001b[0m:\u001b[34m~\u001b[0m$ `
+          mockSessions.push({
+            id,
+            kind: 'ssh',
+            protocol: 'SSH',
+            title: address,
+            target: address,
+            username,
+            password,
+            buffer:
+              '\u001b[36mMedSafeVault 演示终端\u001b[0m — 以下内容为虚构示例\r\n' +
+              `Last login: ${ISO(new Date())} from 198.51.100.10\r\n` +
+              `\u001b[33m演示模式：命令不会真正执行。\u001b[0m\r\n${prompt}`,
+            pending: '',
+            dirs: {},
+            closed: false,
+          })
+          return {
+            mode,
+            transport: 'builtin',
+            kind: 'ssh',
+            protocol: 'SSH',
+            session_id: id,
+            target: address,
+            title: address,
+            message: t('已在内置终端中打开 {target}', { target: address }),
+          }
+        }
+        if ((mode === 'ftp' || mode === 'sftp') && settings.file_client === 'builtin') {
+          const id = `mock-files-${mockSessionSeq++}`
+          const protocol = mode === 'ftp' ? 'FTP' : 'SFTP'
+          mockSessions.push({
+            id,
+            kind: 'files',
+            protocol,
+            title: `${protocol} · ${address}`,
+            target: address,
+            username,
+            password,
+            buffer: '',
+            pending: '',
+            dirs: demoDirs(protocol),
+            closed: false,
+          })
+          return {
+            mode,
+            transport: 'builtin',
+            kind: 'files',
+            protocol,
+            session_id: id,
+            target: address,
+            title: `${protocol} · ${address}`,
+            message: t('已在内置文件管理中打开 {target}', { target: address }),
+          }
+        }
+        if (mode === 'rdp') {
+          const pid = 3000 + mockSessionSeq++
+          return {
+            mode,
+            transport: 'window',
+            target: address,
+            title: address,
+            pid,
+            message: t('已启动远程桌面窗口：{target}', { target: address }),
+          }
+        }
+        const label =
+          mode === 'vnc'
+            ? 'VNC Viewer'
+            : mode === 'ftp' || mode === 'sftp'
+              ? 'WinSCP'
+              : mode === 'telnet'
+                ? 'Telnet'
+                : 'SecureCRT'
+        return {
+          mode,
+          transport: 'external',
+          target: address,
+          title: address,
+          message: t('已启动 {program}：{target}', { program: label, target: address }),
+        }
       }
+      case 'terminal_list':
+        return {
+          sessions: mockSessions
+            .filter((session) => !session.closed)
+            .map(({ id, kind, protocol, title }) => ({ id, kind, protocol, title, error: '' })),
+        }
+      case 'terminal_read': {
+        requireUnlocked()
+        const session = takeSession(String(args[0]))
+        const cursor = Math.max(0, Number(args[1]) || 0)
+        if (session.kind !== 'ssh') return { data: '', cursor, closed: false, error: '' }
+        const data = session.buffer.slice(cursor)
+        return { data, cursor: session.buffer.length, closed: session.closed, error: '' }
+      }
+      case 'terminal_write': {
+        requireUnlocked()
+        const session = takeSession(String(args[0]))
+        if (session.kind !== 'ssh' || session.closed) return { ok: true }
+        const prompt = `\u001b[32m${session.username || 'demo'}@demo-${session.target.split(':')[0]}\u001b[0m:\u001b[34m~\u001b[0m$ `
+        for (const char of String(args[1] || '')) {
+          if (char === '\r' || char === '\n') {
+            session.buffer += `\r\n${prompt}`
+            session.pending = ''
+          } else if (char === '\u007f') {
+            if (session.pending) {
+              session.pending = session.pending.slice(0, -1)
+              session.buffer += '\b \b'
+            }
+          } else if (char === '\u0003') {
+            session.buffer += `^C\r\n${prompt}`
+            session.pending = ''
+          } else if (char >= ' ') {
+            session.pending += char
+            session.buffer += char
+          }
+        }
+        return { ok: true }
+      }
+      case 'terminal_resize':
+        return { ok: true }
+      case 'session_close': {
+        const session = mockSessions.find((item) => item.id === String(args[0]))
+        if (session) session.closed = true
+        mockSessions = mockSessions.filter((item) => !item.closed)
+        return { ok: true }
+      }
+      case 'files_list':
+        return mockListing(takeSession(String(args[0])), String(args[1] || ''))
+      case 'files_mkdir': {
+        const session = takeSession(String(args[0]))
+        const path = String(args[1] || '')
+        const parent = parentPath(path)
+        const name = path.slice(parent.length).replace(/^[\\/]+/, '')
+        if (!session.dirs[parent]) throw new Error('无法新建文件夹')
+        session.dirs[parent].push(dirEntry(name, 0, true, 0))
+        session.dirs[path] = []
+        return { ok: true }
+      }
+      case 'files_remove': {
+        const session = takeSession(String(args[0]))
+        const path = String(args[1] || '')
+        const parent = parentPath(path)
+        const name = path.slice(parent.length).replace(/^[\\/]+/, '')
+        session.dirs[parent] = (session.dirs[parent] || []).filter((entry) => entry.name !== name)
+        delete session.dirs[path]
+        return { ok: true }
+      }
+      case 'files_rename': {
+        const session = takeSession(String(args[0]))
+        const oldPath = String(args[1] || '')
+        const newPath = String(args[2] || '')
+        const parent = parentPath(oldPath)
+        const oldName = oldPath.slice(parent.length).replace(/^[\\/]+/, '')
+        const newName = newPath.slice(parentPath(newPath).length).replace(/^[\\/]+/, '')
+        const entry = (session.dirs[parent] || []).find((item) => item.name === oldName)
+        if (!entry) throw new Error('文件不存在')
+        entry.name = newName
+        if (session.dirs[oldPath]) {
+          session.dirs[newPath] = session.dirs[oldPath]
+          delete session.dirs[oldPath]
+        }
+        return { ok: true }
+      }
+      case 'files_download':
+        return {
+          saved: `C:\\Users\\CaiJianling\\Downloads\\${String(args[1] || '').split(/[\\/]/).pop() || 'demo.bin'}`,
+          name: String(args[1] || '').split(/[\\/]/).pop() || 'demo.bin',
+        }
+      case 'files_upload':
+        return { uploaded: String(args[1] || ''), name: '上传示例.txt' }
+      case 'local_list':
+        return { listing: localListing(String(args[0] || '')) }
+      case 'rdp_focus':
+        return { focused: true }
+      case 'rdp_close':
+        return { closed: true }
+      case 'choose_program': {
+        const paths: Record<string, string> = {
+          securecrt_path: 'C:\\Program Files\\VanDyke Software\\Clients\\SecureCRT.exe',
+          putty_path: 'C:\\Program Files\\PuTTY\\putty.exe',
+          xshell_path: 'C:\\Program Files\\NetSarang\\Xshell\\Xshell.exe',
+          winscp_path: 'C:\\Program Files\\WinSCP\\WinSCP.exe',
+          vnc_viewer_path: 'C:\\Program Files\\RealVNC\\VNC Viewer\\vncviewer.exe',
+        }
+        const key = String(args[0] || '')
+        const path = paths[key]
+        if (!path) throw new Error('不支持的程序类型')
+        settings = { ...settings, [key]: path } as Settings
+        return { settings, path }
+      }
+      case 'close_window':
+        return { ok: true, hidden: String(args[0] || '') !== 'quit' }
+      case 'dismiss_close_prompt':
+        return { ok: true }
       case 'preview_excel': {
         requireUnlocked()
         const page = pageById(Number(args[0]))
@@ -1694,6 +2040,34 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         if (patch.mask_addresses != null) settings = { ...settings, mask_addresses: Boolean(patch.mask_addresses) }
         if (patch.compact_rows != null) settings = { ...settings, compact_rows: Boolean(patch.compact_rows) }
         if (patch.securecrt_path != null) settings = { ...settings, securecrt_path: String(patch.securecrt_path) }
+        if (patch.putty_path != null) settings = { ...settings, putty_path: String(patch.putty_path) }
+        if (patch.xshell_path != null) settings = { ...settings, xshell_path: String(patch.xshell_path) }
+        if (patch.winscp_path != null) settings = { ...settings, winscp_path: String(patch.winscp_path) }
+        if (patch.vnc_viewer_path != null)
+          settings = { ...settings, vnc_viewer_path: String(patch.vnc_viewer_path) }
+        if (
+          patch.ssh_client != null &&
+          ['auto', 'builtin', 'securecrt', 'putty', 'xshell', 'openssh'].includes(String(patch.ssh_client))
+        )
+          settings = { ...settings, ssh_client: patch.ssh_client }
+        if (
+          patch.telnet_client != null &&
+          ['auto', 'securecrt', 'putty', 'telnet'].includes(String(patch.telnet_client))
+        )
+          settings = { ...settings, telnet_client: patch.telnet_client }
+        if (patch.file_client === 'builtin' || patch.file_client === 'winscp')
+          settings = { ...settings, file_client: patch.file_client }
+        if (patch.vnc_client === 'builtin' || patch.vnc_client === 'external')
+          settings = { ...settings, vnc_client: patch.vnc_client }
+        if (
+          patch.rdp_fill != null &&
+          ['user', 'password', 'none'].includes(String(patch.rdp_fill))
+        )
+          settings = { ...settings, rdp_fill: patch.rdp_fill }
+        if (patch.close_action === 'tray' || patch.close_action === 'quit')
+          settings = { ...settings, close_action: patch.close_action }
+        if (patch.close_confirm != null)
+          settings = { ...settings, close_confirm: Boolean(patch.close_confirm) }
         if (patch.table_font != null) settings = { ...settings, table_font: patch.table_font === 'sans' ? 'sans' : 'mono' }
         if (
           patch.ui_scale != null &&

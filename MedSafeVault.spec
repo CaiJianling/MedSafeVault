@@ -28,7 +28,19 @@ hiddenimports = [
     "openpyxl",
     "xlrd",
     "olefile",
-] + collect_submodules("webview") + collect_submodules("msoffcrypto")
+    "paramiko",
+    "bcrypt",
+    "nacl",
+    "pystray",
+    "PIL.Image",
+    "PIL.ImageDraw",
+] + (
+    collect_submodules("webview")
+    + collect_submodules("msoffcrypto")
+    + collect_submodules("paramiko")
+    + collect_submodules("websockets")
+    + collect_submodules("pystray")
+)
 
 a = Analysis(
     [str(ROOT / "MedSafeVault.py")],

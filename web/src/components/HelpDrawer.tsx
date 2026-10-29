@@ -16,6 +16,7 @@ import {
   Monitor,
   Settings2,
   ShieldCheck,
+  SquareTerminal,
   Terminal,
   X,
 } from 'lucide-react'
@@ -31,6 +32,7 @@ type SectionId =
   | 'backup'
   | 'excel'
   | 'remote'
+  | 'terminal'
   | 'table'
   | 'env'
   | 'deploy'
@@ -44,6 +46,7 @@ const SECTIONS: { id: SectionId; title: string; icon: typeof BookOpen }[] = [
   { id: 'backup', title: '备份与迁移', icon: ArchiveRestore },
   { id: 'excel', title: 'Excel 导入导出', icon: FileSpreadsheet },
   { id: 'remote', title: '远程连接', icon: Monitor },
+  { id: 'terminal', title: '内置终端与托盘', icon: SquareTerminal },
   { id: 'table', title: '列表与快捷键', icon: Keyboard },
   { id: 'env', title: '环境变量', icon: Terminal },
   { id: 'deploy', title: '终端部署', icon: HardDrive },
@@ -368,12 +371,31 @@ export function HelpDrawer({
           <Heading>{t('远程连接')}</Heading>
           <Bullets
             items={[
-              t('行内链接按钮或右键菜单可直接连接：RDP、SecureCRT 会话、浏览器打开地址。'),
-              <>
-                {t('RDP 会在数据目录生成带用户名与端口的临时 .rdp 文件再调用系统 mstsc；端口、地址取自该行的列值。')}
-              </>,
-              t('SecureCRT 需要在设置 → 数据中指定程序路径（通常无需管理员权限，绿色版也可）。'),
-              t('连接工具本身不在软件内嵌，因此不会额外开放端口，也不会修改系统远程设置。'),
+              t('每条记录可以在编辑窗口里指定连接方式：自动判断、SSH、RDP、Telnet、FTP、SFTP、VNC；列表行尾的连接按钮还可以临时改选一种方式。'),
+              t('「自动判断」按地址判断：http/https 用默认浏览器；端口 22 → SSH、3389 → RDP、23 → Telnet、21 → FTP、5900-5903 → VNC；没有端口时，操作系统含 Windows 则用 RDP，其余按 SSH。'),
+              t('RDP 会用系统 mstsc 打开，端口与地址取自该行的列值；是否填充用户名或密码在 设置 → 常规 → 远程连接 中选择。'),
+              t('外部程序（SecureCRT、PuTTY、Xshell、WinSCP、VNC Viewer、Windows 自带 OpenSSH / Telnet）只需在设置里指定路径，找不到时会自动搜索注册表与常见安装目录，绿色版同样可用。'),
+              t('连接工具与内置终端只在本机向外发起连接，不会监听端口供外部访问，也不修改系统的远程设置。'),
+            ]}
+          />
+        </div>
+
+        <div
+          className="scroll-mt-2"
+          ref={(node) => {
+            anchors.current.terminal = node
+          }}
+        >
+          <Heading>{t('内置终端与托盘')}</Heading>
+          <Bullets
+            items={[
+              t('内置 SSH 终端、FTP / SFTP 双栏文件管理和 VNC 画布都在窗口内的全屏浮层中打开，按标签页管理；点顶部终端按钮展开或收起，按钮角标显示当前标签数量。'),
+              t('SSH 终端支持复制选中、清屏与适配窗口；FTP / SFTP 支持上传、下载、新建文件夹、重命名与删除，左侧是本机文件，右侧是服务器目录。'),
+              t('RDP 无法嵌在窗口里，因此以标签页的形式管理 mstsc 窗口：可以重新聚焦或关闭它，关闭标签页等于结束远程桌面。'),
+              t('终端会话与密码只保存在内存中；锁定密码库、退出程序或关闭标签页时立即断开，不会在磁盘上留下任何会话或凭据。'),
+              t('点击窗口关闭按钮时默认最小化到通知区域：程序继续在后台运行，右键小图标可以打开主界面、锁定密码库或退出。'),
+              t('关闭行为可在 设置 → 常规 → 关闭按钮 中改为「直接退出」，也可以关掉「每次关闭时询问」；取消提示后窗口保持打开。'),
+              t('窗口隐藏在托盘时，再次双击 MedSafeVault.exe 会唤回已打开的窗口，而不会再启动第二个实例。'),
             ]}
           />
         </div>

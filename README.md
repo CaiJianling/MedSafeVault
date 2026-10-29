@@ -22,12 +22,18 @@
 - 所有敏感列字段级加密，密码列使用更高等级的独立子密钥；列表默认掩码显示，逐字段点击小眼睛才能查看，没有「全部显示」。
 - 一次性恢复密钥（`.msvkey` 文件或 32 位恢复码）可强制重设打开密码，忘记主密码不会丢数据。
 - 复制密码后剪贴板 30 秒自动清除；修改历史本身也是加密存储，支持撤销/重做与逐条回滚。
+- 内置会话只活在内存里：SSH/SFTP/FTP/VNC 密码不落盘，锁定、退出或关闭标签时连接即断开；VNC 画面经 `127.0.0.1` 回环上的 WebSocket 中继进入 WebView2，不额外对外开放端口。
 - 回收站保留被删除的记录，可还原或彻底清除；Excel 导入导出模板与列映射，导出时可选用**工作簿密码**保护 `.xlsx`（Excel 打开时要求输入）；导入带打开密码的 `.xlsx / .xls` 会先要求输入密码，验证通过才显示预览，解密只在内存中进行；导出备份时设置**备份密码**，整个文件（含页面结构与记录条数）都被它加密，导入时必须先验证该密码才能看到内容。
 
 **连接与工具**
 
-- 一键 RDP（自动生成临时 `.rdp` 并带用户名/端口）、SecureCRT 会话（本机路径可在设置中指定）、浏览器打开地址。
-- 单实例运行、亮/暗/跟随系统三态主题、8 种强调色、界面大小（小/标准/大）、界面字体与代码字体（读取系统字体）、中英文界面（跟随系统，可手动切换）；主题与配色存在密码库里，换机或换用户配置后打开仍是原来的样子。
+- 每条记录可单独指定连接方式（默认 / SSH / RDP / Telnet / FTP / SFTP / VNC）。选「默认」时按端口判断（5900–5903 VNC、3389 RDP、21 FTP、23 Telnet、22 SSH），再按记录里的操作系统判断（Windows → RDP，其余 → SSH）；地址写成 `host:port` 时以地址里的端口为准。
+- RDP 调用系统 `mstsc`：设置里可选自动填充「用户名 + 密码 / 仅用户名 / 不填充」（默认仅用户名）。密码不写进 `.rdp` 文件，只在 mstsc 运行期间写入当前用户的临时凭据，mstsc 退出后立即删除。
+- 外部客户端可自动查找，也可在设置里指定路径：SecureCRT（支持带密码打开 SSH/Telnet 会话）、PuTTY、Xshell、Windows 自带 OpenSSH 与 telnet、WinSCP、VNC Viewer；浏览器地址仍可直接打开。
+- 内置终端：SSH 终端（xterm 前端）、FTP/SFTP 图形化双栏文件管理（上传、下载、新建目录、重命名、删除、切换本机目录）、VNC 画面（noVNC）。连接后在本窗口弹出全屏浮层，按标签页管理；多个标签时顶栏「终端」按钮显示数量角标，关闭浮层只是收回按钮、不中断会话；锁定或退出时全部断开。
+- 关闭窗口有两种行为：最小化到小图标区（托盘）或直接退出。默认每次关闭都询问，可在弹窗里「记住我的选择」，也能在设置里改回每次询问。托盘小图标右键菜单提供打开主界面、锁定密码库、退出。
+- 单实例运行，重复启动会把已隐藏的窗口叫回前台；窗口会按屏幕可用区域自动缩小（高缩放率的 1366×768 笔记本不会把底栏藏到任务栏后面）。
+- 亮/暗/跟随系统三态主题、8 种强调色、界面大小（小/标准/大）、界面字体与代码字体（读取系统字体）、中英文界面（跟随系统，可手动切换）；主题与配色存在密码库里，换机或换用户配置后打开仍是原来的样子。
 - 内置帮助说明（顶栏问号，锁屏与首次设置页也有入口）：11 个小节覆盖加密模型、恢复密钥、数据目录搬移、备份迁移、Excel、远程连接、快捷键、环境变量与老旧终端部署，中英文同稿。
 
 ---
@@ -39,12 +45,14 @@ MedSafeVault.py            入口脚本（等价于 python -m backend.main）
 backend/                   Python 侧：加密、存储、桥接
   crypto.py                AES-256-GCM / PBKDF2 / HKDF，两层密文格式
   store.py                 VaultService：库、页、列、记录、历史、回收站、备份、设置
-  api.py                   暴露给前端的 js_api 门面（56 个方法）
+  api.py                   暴露给前端的 js_api 门面（84 个方法）
   excelio.py               xlsx / xls / csv 读取与导出
-  remote.py                RDP、SecureCRT、浏览器
+  remote.py                外部程序启动：mstsc、SecureCRT、PuTTY、Xshell、WinSCP、VNC Viewer
+  sessions.py              内置会话：SSH、FTP/SFTP、VNC 中继（仅内存）
+  tray.py                  托盘小图标与右键菜单
   clipboard.py             Win32 剪贴板 + 定时清除
   paths.py                 资源目录 / 数据目录
-  main.py                  单实例、日志、pywebview 窗口
+  main.py                  单实例、日志、pywebview 窗口、窗口尺寸适配
 web/                       React 19 + TypeScript + Vite + Tailwind 4 + HeroUI 3
   src/lib/api.ts           统一调用层：原生桥 / 浏览器演示模式
   src/lib/i18n.tsx         中文源串作键的中英文词典 + 后端文案翻译
@@ -52,7 +60,7 @@ web/                       React 19 + TypeScript + Vite + Tailwind 4 + HeroUI 3
 tools/                     图标生成、打包、桌面/CDP 截图、自检脚本
 ```
 
-前后端只通过 pywebview 注入的 `window.pywebview.api.<method>()` 通信，返回值统一为 `{ok: true, ...}` / `{ok: false, error, locked?}`；前端在 `ApiError` 一处集中翻译后端文案。没有网络端口监听，`http_server` 只在回环地址上为 WebView2 提供静态资源。
+前后端只通过 pywebview 注入的 `window.pywebview.api.<method>()` 通信，返回值统一为 `{ok: true, ...}` / `{ok: false, error, locked?}`；前端在 `ApiError` 一处集中翻译后端文案。默认不监听网络端口，`http_server` 只在回环地址上为 WebView2 提供静态资源；只有内置 VNC 会话会在 `127.0.0.1` 上临时开一个 WebSocket 中继（端口随机，会话关闭即释放），调试端口仅在 `MSV_DEBUG=1` 时开放。
 
 在纯浏览器（无原生桥）下会退化为演示模式：`src/lib/mock.ts` 用内存数据实现同一套接口，方便截图与 UI 校验，数据不落盘。
 
@@ -90,7 +98,7 @@ set MSV_DEV_URL=http://localhost:5179
 ..\.venv\Scripts\python.exe MedSafeVault.py
 ```
 
-`MSV_DEBUG=1` 打开 WebView2 开发者工具。自检脚本：`tools/selftest.py` 无界面验证加密、导入导出与历史；`tools/test_location.py` 在临时目录里跑完数据目录搬移的全部分支；`tools/test_backup.py` 验证备份封套的加解密、错误密码、旧格式兼容与恢复后主密码仍可用；`tools/test_excel.py` 验证带密码的 xlsx 导出/预览/导入与加密旧式 `.xls` 的解密导入（含无密码、错误密码与损坏文件分支，样本在 `tools/fixtures/`）；`tools/check_i18n.py` 扫描界面字符串，缺英文词条就报错（退出码 1）。`tools/desktop_shot.ps1` 启动真实窗口、模拟粘贴/按键并截取窗口位图，用于桌面端回归（注意它必须先声明 DPI 感知，否则截到的只是窗口左上角）。
+`MSV_DEBUG=1` 打开 WebView2 的远程调试端口（`MSV_DEBUG_PORT`，默认 9222，开发者工具窗口不自动弹出），可配合 `tools/cdp_shot.mjs` 驱动真实窗口做截图回归。自检脚本：`tools/selftest.py` 无界面验证加密、导入导出与历史；`tools/test_location.py` 在临时目录里跑完数据目录搬移的全部分支；`tools/test_backup.py` 验证备份封套的加解密、错误密码、旧格式兼容与恢复后主密码仍可用；`tools/test_excel.py` 验证带密码的 xlsx 导出/预览/导入与加密旧式 `.xls` 的解密导入（含无密码、错误密码与损坏文件分支，样本在 `tools/fixtures/`）；`tools/test_connect.py` 覆盖连接方式推断（端口、`host:port`、操作系统）、设置持久化、FTP/SFTP 列表解析、本机目录、VNC 中继与 SSH 会话的建立/读写/关闭，以及锁库时统一断开；`tools/check_i18n.py` 扫描界面字符串，缺英文词条就报错（退出码 1）。`tools/desktop_shot.ps1` 启动真实窗口、模拟粘贴/按键并截取窗口位图，用于桌面端回归（注意它必须先声明 DPI 感知，否则截到的只是窗口左上角）。
 
 > 维护提示：pywebview 在注入 `window.pywebview.api` 之前会递归遍历 `js_api` 对象的每个**公开**属性。因此 `backend/api.py` 的 `Api` 只能暴露方法，服务与窗口引用必须写成 `_service` / `_window` / `_attach`；否则它会顺着引用爬进 sqlite 连接和整个 WinForms/WebView2 对象树，UI 线程被占用数十秒并抛出「maximum recursion depth exceeded」，前端表现为「本地服务未就绪」。
 
@@ -104,9 +112,9 @@ set MSV_DEV_URL=http://localhost:5179
 .venv\Scripts\python.exe tools\build_exe.py --skip-web   # 复用现有 web/dist
 ```
 
-产物为 `dist/MedSafeVault.exe`（onefile、无控制台窗口、不压缩 UPX），构建结束会打印体积与 sha256。配置见 `MedSafeVault.spec`：打包 `web/dist` 与 `assets`，收集 `webview` 全部子模块（`edgechromium` / `winforms`）、`clr`、`bottle`、`openpyxl`、`xlrd`、`olefile` 与 `msoffcrypto` 的格式化/加密法子模块；版本信息来自 `packaging/version_info.txt`。
+产物为 `dist/MedSafeVault.exe`（onefile、无控制台窗口、不压缩 UPX），构建结束会打印体积与 sha256。配置见 `MedSafeVault.spec`：打包 `web/dist` 与 `assets`，收集 `webview` 全部子模块（`edgechromium` / `winforms`）、`clr`、`bottle`、`openpyxl`、`xlrd`、`olefile`、`msoffcrypto` 的格式化/加密法子模块，以及 `paramiko`（含 `bcrypt` / `nacl`）、`websockets`、`pystray` 与 `PIL.Image`/`ImageDraw`；版本信息来自 `packaging/version_info.txt`。
 
-当前产物 **24.7 MB**，`sha256 addf6d9a7e9ce26d170157359552ea1b2f7386f8a213d3ed5803803bb5822ab8`（Python 3.13 x64 构建，已在真机完成启动、解锁、数据目录搬移与便携位置二次启动验证，见第 9 节）。换机器或改依赖后重新构建，以脚本打印值为准。
+当前产物 **26.9 MB**，`sha256 9f3dd87de4db20094c4f9739727534b34c8bcc1b753026d3a9cc059c776da515`（Python 3.13 x64 构建，已在真机完成启动、解锁、内置终端与关闭/托盘流程验证，见第 9 节）。换机器或改依赖后重新构建，以脚本打印值为准。
 
 免管理员说明：onefile 解压到 `%TEMP%`，数据写入 `%APPDATA%\MedSafeVault`，不写注册表、不需要安装运行库，拷到任意可写目录即可运行。
 
@@ -173,7 +181,8 @@ webview/          WebView2 用户数据
 | --- | --- |
 | `MEDSAFE_DATA_DIR` | 强制指定数据目录，优先级高于设置页；设置后本页选项变灰 |
 | `MSV_DEV_URL` | 让桌面端加载 Vite 开发服务器 |
-| `MSV_DEBUG` | `1` 打开开发者工具 |
+| `MSV_DEBUG` | `1` 打开 WebView2 远程调试端口（不弹开发者工具窗口） |
+| `MSV_DEBUG_PORT` | 调试端口，默认 9222 |
 
 备份与迁移：设置 → 导出完整备份时输入备份密码，得到整体加密的 `.msvbackup`；导入时先「验证并预览」再覆盖恢复，恢复前会自动留一份当前数据的备份。恢复密钥 `.msvkey` 请单独保管。整目录拷贝即完成迁移。
 
@@ -208,6 +217,10 @@ Win7 终端要跑本项目，需要一条独立的 32 位工具链：
 - 加密只在字段层，SQLite 结构、列名、记录条数与「名称」列的明文索引可见，用于搜索与排序。
 - 恢复密钥每次重新生成后旧文件立即失效；它是访问密码库的等价凭据，请按机密文件管理。
 - 自动锁定基于最后操作时间，机器休眠期间的计时以唤醒后的活动为准。
+- 最小化到小图标区只隐藏窗口，密码库仍保持解锁；彻底离开座位请用托盘的「锁定密码库」或等自动锁定。个别安全软件会拦截托盘回调，此时仍可从任务栏或重复启动 exe 找回窗口。
+- 内置 VNC 走 noVNC 的标准 RFB 画面与键鼠，剪贴板双向、文件传输与音频不支持；需要这些能力请在设置里改用 VNC Viewer（external）。
+- FTP 是明文协议，账号与文件内容在网络上可被嗅探；同网段能用 SFTP 就不要用 FTP。
+- 外部客户端（SecureCRT / PuTTY / Xshell / WinSCP / VNC Viewer）需要本机已安装，内置 SSH/SFTP/FTP/VNC 与系统 `mstsc` 不依赖它们。
 - Excel 工作簿密码只保护导出文件本身，强度取决于密码；采用 ECMA-376 agile 加密（Excel 2010 及以上、WPS 可直接打开）。忘记密码无法打开该文件，但保险库数据不受影响。导入侧可解密带打开密码的 `.xlsx / .xlsm` 与旧式 `.xls`（BIFF8 RC4）；其他厂商私有加密的表格需要先用 Excel 另存为无密码文件。
 - 演示模式（纯浏览器）不加密、不落盘，仅用于界面预览，不要在其中输入真实数据。
 
@@ -232,4 +245,16 @@ Win7 终端要跑本项目，需要一条独立的 32 位工具链：
 
 加密链路经后端脚本核对：不同层级密文前缀、遗留明文重封套、`suggest_values` 不返回密码列、删除/撤销/重做与历史解密一致。界面在 900px 窄屏与应用最小 1140×700（大字号）下均无挤压。演示数据统一使用 `203.0.113.x` / `192.0.2.x` / `198.51.100.x` 等文档保留地址与 `demo_*` 账号。
 
-尚未覆盖：Win7 真机（需第 7 节的 32 位工具链）、杀毒软件白名单场景、以及 32 位固定版本 WebView2 的实际渲染。
+2026-10-29 补充连接方式、内置终端与托盘/关闭行为，截图见 `screenshots/36-50`：
+
+- **连接方式与设置**：记录弹窗里的连接方式下拉（默认/SSH/RDP/Telnet/FTP/SFTP/VNC，`38`），设置「远程连接」页的 SSH/Telnet/文件/VNC 客户端与程序路径、RDP 自动填充（`37`），列表行连接菜单（`36`）；「默认」按端口与操作系统推断、`host:port` 优先，`tools/test_connect.py` 覆盖端口、地址内端口、Windows/非 Windows 与设置持久化。
+- **内置 SSH**：在临时数据目录里连本机演示 SSH 服务（`127.0.0.1:2223`），真实窗口的 xterm 输出欢迎语，输入命令有回显（`43`）。
+- **内置 SFTP**：同一服务上双栏浏览根目录（readme.txt、app.conf、logs），上传/下载/新建目录/重命名/删除由 `tools/test_connect.py` 与手工点击覆盖，远端根目录不再显示 `//`；两个标签时顶栏「终端」按钮出现角标，关闭浮层后会话保留（`44`）。
+- **悬浮终端与 RDP 标签**：演示模式验证空浮层提示（`39`）、暗色双标签（`41`）、RDP 标签页（mstsc 保持独立窗口，标签只负责唤回与关闭，`42`）。
+- **关闭行为**：向真实窗口发送 `WM_CLOSE`，应用内弹出关闭询问（`45`）；选「最小化到小图标区」后窗口隐藏、进程保持响应，再次启动 exe 会把窗口叫回前台且仍保持解锁（`46`）；勾选「记住我的选择」后再次点 X 直接隐藏、不再询问；调用托盘菜单同一入口 `tray_lock` 后窗口回到前台并显示「保险库已手动锁定」（`47`）；调用 `close_window('quit')` 后进程正常退出，无死锁。
+- **窗口适配**：125% 缩放、1920×1080（可用 1536×816）的屏幕上，窗口自动从 1460×930 缩到 1460×776，锁屏底栏与版本号完整可见（`48`）。
+- **单文件 exe**：重新打包后（26.9 MB）用同一临时数据目录启动，解锁后 4 条记录完整；从行菜单连接本机 SSH，浮层里出现 `MedSafeVault demo shell`（`49`），说明 paramiko 已正确打入；「收起到终端按钮」后顶栏按钮显示角标 `1`（`50`），再点开标签内容仍在；点「锁定」后浮层与角标一起消失，重新解锁不再有会话；调用 `quit` 后进程正常退出。
+
+托盘小图标本身（在通知区用鼠标点 pystray 菜单）仍需人工确认，自动化只覆盖了菜单回调调用的同一组 API。
+
+尚未覆盖：内置 VNC 的实际画面（本轮没有 VNC 服务，只验证了中继往返与演示模式 UI）、Win7 真机（需第 7 节的 32 位工具链）、杀毒软件白名单场景、以及 32 位固定版本 WebView2 的实际渲染。

@@ -184,7 +184,9 @@ export function ModalFrame({
                 <Modal.CloseTrigger className="absolute right-4 top-4 text-ice-500 hover:text-ice-200" />
               )}
             </Modal.Header>
-            <Modal.Body className={cn('min-h-0 pt-4', bodyClassName)}>{children}</Modal.Body>
+            <Modal.Body className={cn('min-h-0 overflow-x-hidden pt-4', bodyClassName)}>
+              {children}
+            </Modal.Body>
             {footer && <Modal.Footer className="mt-5">{footer}</Modal.Footer>}
           </Modal.Dialog>
         </Modal.Container>

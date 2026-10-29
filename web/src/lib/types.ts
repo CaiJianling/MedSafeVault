@@ -51,10 +51,30 @@ export type TableFont = 'mono' | 'sans'
 export type UiScale = 'small' | 'standard' | 'large'
 export type Accent = 'blue' | 'sky' | 'cyan' | 'teal' | 'emerald' | 'violet' | 'rose' | 'amber'
 
+/** How a record is reached; "auto" keeps the old port/OS heuristic. */
+export type ConnectMode = 'auto' | 'ssh' | 'rdp' | 'telnet' | 'ftp' | 'sftp' | 'vnc'
+export type SshClient = 'auto' | 'builtin' | 'securecrt' | 'putty' | 'xshell' | 'openssh'
+export type TelnetClient = 'auto' | 'securecrt' | 'putty' | 'telnet'
+export type FileClient = 'builtin' | 'winscp'
+export type VncClient = 'builtin' | 'external'
+export type RdpFill = 'user' | 'password' | 'none'
+export type CloseAction = 'tray' | 'quit'
+
 export interface Settings {
   auto_lock_minutes: number
   theme: string
   securecrt_path: string
+  putty_path: string
+  xshell_path: string
+  winscp_path: string
+  vnc_viewer_path: string
+  ssh_client: SshClient
+  telnet_client: TelnetClient
+  file_client: FileClient
+  vnc_client: VncClient
+  rdp_fill: RdpFill
+  close_action: CloseAction
+  close_confirm: boolean
   table_font: TableFont
   ui_scale: UiScale
   accent: Accent
@@ -63,6 +83,51 @@ export interface Settings {
   mask_usernames: boolean
   mask_addresses: boolean
   compact_rows: boolean
+}
+
+export type ConnectionTransport = 'browser' | 'window' | 'external' | 'builtin'
+
+export interface ConnectResult {
+  mode: string
+  transport: ConnectionTransport
+  target: string
+  title?: string
+  message: string
+  /** Present for built-in sessions. */
+  session_id?: string
+  kind?: 'ssh' | 'files' | 'vnc'
+  protocol?: string
+  ws_url?: string
+  /** Present for RDP windows started through mstsc. */
+  pid?: number
+  credentials?: { username: string; password: string }
+}
+
+export interface SessionInfo {
+  id: string
+  kind: 'ssh' | 'files' | 'vnc'
+  protocol: string
+  title: string
+  error: string
+}
+
+export interface RemoteEntry {
+  name: string
+  is_dir: boolean
+  size: number
+  mtime: number
+}
+
+export interface RemoteListing {
+  path: string
+  entries: RemoteEntry[]
+}
+
+export interface LocalListing {
+  path: string
+  parent: string
+  roots?: { name: string; path: string }[]
+  entries: RemoteEntry[]
 }
 
 export interface RecoveryStatus {

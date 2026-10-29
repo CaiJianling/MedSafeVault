@@ -4,16 +4,16 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
-  Link2,
   Pencil,
   Trash2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { Column, RecordItem } from '../lib/types'
+import type { Column, ConnectMode, RecordItem } from '../lib/types'
 import { copyText } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
 import { cn, isMonospaceColumn } from '../lib/utils'
+import { ConnectMenu } from './ConnectMenu'
 import { IconButton, Tip } from './primitives'
 import { SecretCell } from './SecretCell'
 
@@ -141,7 +141,7 @@ export function RecordTable({
   onSort: (key: string) => void
   onEdit: (row: RecordItem) => void
   onDelete: (row: RecordItem) => void
-  onConnect: (row: RecordItem) => void
+  onConnect: (row: RecordItem, mode: ConnectMode | '') => void
   onToggleRow: (row: RecordItem) => void
   onToggleAll: (checked: boolean) => void
   onRowMenu: (row: RecordItem, position: { x: number; y: number }) => void
@@ -228,7 +228,7 @@ export function RecordTable({
                 </th>
               )
             })}
-            <th className="sticky right-0 w-[104px] min-w-[104px] border-l border-line bg-[var(--msv-table-head)] text-right">
+            <th className="sticky right-0 w-[128px] min-w-[128px] border-l border-line bg-[var(--msv-table-head)] text-right">
               {t('操作')}
             </th>
           </tr>
@@ -319,17 +319,12 @@ export function RecordTable({
                         </td>
                       )
                     })}
-                    <td className="sticky right-0 border-l border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]">
+                    <td className="sticky right-0 w-[128px] min-w-[128px] border-l border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]">
                       <div className="row-actions flex items-center justify-end gap-0.5">
-                        <IconButton
-                          label={t('连接')}
-                          tip={t('打开连接（RDP / SecureCRT / 浏览器）')}
-                          tipRight
-                          onPress={() => onConnect(row)}
-                          className="size-7 min-w-7"
-                        >
-                          <Link2 className="size-3.5" />
-                        </IconButton>
+                        <ConnectMenu
+                          compact
+                          onConnect={(mode) => onConnect(row, mode)}
+                        />
                         <IconButton
                           label={t('编辑')}
                           tip={t('编辑记录')}

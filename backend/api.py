@@ -7,6 +7,7 @@ import os
 import platform
 import subprocess
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -28,9 +29,16 @@ class Api:
         self._window: webview.Window | None = None
         self._pending_backup: dict | None = None
         self._pending_backup_path: str | None = None
+        self._tray = None
+        self._force_close = False
+        self._close_prompt_open = False
+        self._hidden = False
 
     def _attach(self, window: webview.Window) -> None:
         self._window = window
+
+    def _attach_tray(self, tray) -> None:
+        self._tray = tray
 
     # --------------------------------------------------------------- helpers
     def _guard(self, fn, *args, **kwargs) -> dict:
@@ -274,6 +282,75 @@ class Api:
     def connect(self, record_id: int, mode: str | None = None) -> dict:
         return self._guard(lambda: self._service.connect_record(int(record_id), mode))
 
+    def terminal_list(self) -> dict:
+        return self._guard(lambda: {"sessions": self._service.session_list()})
+
+    def terminal_read(self, session_id: str, cursor: int = 0) -> dict:
+        return self._guard(
+            lambda: self._service.terminal_read(str(session_id), int(cursor or 0))
+        )
+
+    def terminal_write(self, session_id: str, data: str) -> dict:
+        return self._guard(
+            lambda: self._service.terminal_write(str(session_id), data or "")
+        )
+
+    def terminal_resize(self, session_id: str, cols: int, rows: int) -> dict:
+        return self._guard(
+            lambda: self._service.terminal_resize(
+                str(session_id), int(cols or 80), int(rows or 24)
+            )
+        )
+
+    def session_close(self, session_id: str) -> dict:
+        return self._guard(lambda: self._service.close_session(str(session_id)))
+
+    def files_list(self, session_id: str, path: str = "") -> dict:
+        return self._guard(
+            lambda: self._service.files_list(str(session_id), path or "")
+        )
+
+    def files_mkdir(self, session_id: str, path: str) -> dict:
+        return self._guard(lambda: self._service.files_mkdir(str(session_id), path))
+
+    def files_remove(self, session_id: str, path: str, is_dir: bool = False) -> dict:
+        return self._guard(
+            lambda: self._service.files_remove(str(session_id), path, bool(is_dir))
+        )
+
+    def files_rename(self, session_id: str, old: str, new: str) -> dict:
+        return self._guard(
+            lambda: self._service.files_rename(str(session_id), old, new)
+        )
+
+    def files_download(self, session_id: str, remote: str, filename: str = "") -> dict:
+        def action():
+            name = filename or os.path.basename(remote) or "download"
+            path = self._save_dialog(name, ("所有文件 (*.*)",))
+            if not path:
+                return {"cancelled": True}
+            result = self._service.files_download(str(session_id), remote, path)
+            return {"saved": result.get("path"), "name": result.get("name")}
+        return self._guard(action)
+
+    def files_upload(self, session_id: str, remote_dir: str) -> dict:
+        def action():
+            path = self._open_dialog(("所有文件 (*.*)",))
+            if not path:
+                return {"cancelled": True}
+            result = self._service.files_upload(str(session_id), path, remote_dir)
+            return {"uploaded": result.get("path"), "name": result.get("name")}
+        return self._guard(action)
+
+    def local_list(self, path: str = "") -> dict:
+        return self._guard(lambda: {"listing": self._service.local_list(path or "")})
+
+    def rdp_focus(self, pid: int) -> dict:
+        return self._guard(lambda: self._service.rdp_focus(int(pid)))
+
+    def rdp_close(self, pid: int) -> dict:
+        return self._guard(lambda: self._service.rdp_close(int(pid)))
+
     # ------------------------------------------------------------------ excel
     def preview_excel(self, page_id: int) -> dict:
         def action():
@@ -396,14 +473,29 @@ class Api:
     def set_settings(self, patch: dict) -> dict:
         return self._guard(lambda: {"settings": self._service.set_settings(patch or {})})
 
-    def choose_securecrt(self) -> dict:
+    _PROGRAM_FIELDS = {
+        "securecrt_path": ("SecureCRT", "SecureCRT.exe"),
+        "putty_path": ("PuTTY", "putty.exe"),
+        "xshell_path": ("Xshell", "Xshell.exe"),
+        "winscp_path": ("WinSCP", "WinSCP.exe"),
+        "vnc_viewer_path": ("VNC Viewer", "vncviewer.exe"),
+    }
+
+    def choose_program(self, key: str) -> dict:
         def action():
-            path = self._open_dialog(("SecureCRT (SecureCRT.exe)", "可执行文件 (*.exe)"))
+            field = str(key or "")
+            if field not in self._PROGRAM_FIELDS:
+                raise VaultError("不支持的程序类型")
+            label, exe = self._PROGRAM_FIELDS[field]
+            path = self._open_dialog((f"{label} ({exe})", "可执行文件 (*.exe)"))
             if not path:
                 return {"cancelled": True}
-            settings = self._service.set_settings({"securecrt_path": path})
-            return {"settings": settings}
+            settings = self._service.set_settings({field: path})
+            return {"settings": settings, "path": path}
         return self._guard(action)
+
+    def choose_securecrt(self) -> dict:
+        return self.choose_program("securecrt_path")
 
     def get_about(self) -> dict:
         def action():
@@ -480,6 +572,98 @@ class Api:
             }
         return self._guard(action)
 
+    # ------------------------------------------------------------ close/tray
+    def on_window_closing(self) -> bool:
+        """Runs on the UI thread when the user clicks the window X."""
+        if self._force_close:
+            return True
+        try:
+            settings = self._service.get_settings()
+        except Exception:
+            return True
+        if not settings.get("close_confirm", True):
+            if settings.get("close_action") == "tray" and self._tray is not None:
+                self._hide_to_tray()
+                return False
+            return True
+        if self._close_prompt_open:
+            return False
+        self._close_prompt_open = True
+        # evaluate_js waits for a WebView2 continuation on this very UI thread,
+        # so it must run from a worker thread — never inline in FormClosing.
+        threading.Thread(
+            target=self._show_close_prompt, name="close-prompt", daemon=True
+        ).start()
+        return False
+
+    def _show_close_prompt(self) -> None:
+        try:
+            if self._window:
+                self._window.evaluate_js(
+                    "window.__msvClosePrompt && window.__msvClosePrompt()"
+                )
+        except Exception:
+            log.debug("close prompt failed", exc_info=True)
+            self._close_prompt_open = False
+
+    def dismiss_close_prompt(self) -> dict:
+        self._close_prompt_open = False
+        return {"ok": True}
+
+    def close_window(self, action: str = "tray", remember: bool = False) -> dict:
+        action = action if action in ("tray", "quit") else "tray"
+        self._close_prompt_open = False
+        if remember:
+            try:
+                self._service.set_settings(
+                    {"close_action": action, "close_confirm": False}
+                )
+            except Exception:
+                log.debug("could not remember close behavior", exc_info=True)
+        if action == "tray" and self._tray is not None:
+            self._hide_to_tray()
+            return {"ok": True, "hidden": True}
+        self.quit()
+        return {"ok": True, "hidden": False}
+
+    def _hide_to_tray(self) -> None:
+        if not self._window:
+            return
+        try:
+            self._window.hide()
+            self._hidden = True
+        except Exception:
+            log.debug("hide to tray failed", exc_info=True)
+
+    def show_window(self) -> None:
+        """Tray callback: bring the main window back."""
+        if not self._window:
+            return
+        try:
+            self._window.restore()
+        except Exception:
+            pass
+        try:
+            self._window.show()
+            self._hidden = False
+        except Exception:
+            log.debug("show window failed", exc_info=True)
+
+    def tray_lock(self) -> None:
+        try:
+            self._service.lock("manual")
+        except Exception:
+            log.debug("tray lock failed", exc_info=True)
+        self.show_window()
+        try:
+            if self._window:
+                self._window.evaluate_js("window.location.reload()")
+        except Exception:
+            log.debug("reload after tray lock failed", exc_info=True)
+
+    def tray_quit(self) -> None:
+        self.quit()
+
     # ---------------------------------------------------------------- native
     def _show_message(self, title: str, message: str) -> None:
         """Small helper that avoids blocking API threads when possible."""
@@ -495,6 +679,9 @@ class Api:
             log.debug("Could not show in-app message", exc_info=True)
 
     def quit(self) -> None:
+        # destroy() fires FormClosing; without this flag the close handler would
+        # cancel the shutdown and pop the prompt again.
+        self._force_close = True
         if self._window:
             try:
                 self._window.destroy()

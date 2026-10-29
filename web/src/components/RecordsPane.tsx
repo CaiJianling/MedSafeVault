@@ -25,7 +25,7 @@ import { ApiError, api, copyText } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { translateServerText, useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
-import type { Column, ExcelPreview, Page, RecordItem } from '../lib/types'
+import type { Column, ConnectMode, ConnectResult, ExcelPreview, Page, RecordItem } from '../lib/types'
 import { cn, relativeTime, shortPath } from '../lib/utils'
 import { ExcelExportDialog } from './ExcelExportDialog'
 import { ExcelImportDialog } from './ExcelImportDialog'
@@ -57,6 +57,7 @@ export function RecordsPane({
   onChanged,
   onEditPage,
   onAddPage,
+  onConnectResult,
 }: {
   page: Page | null
   refreshToken: number
@@ -64,6 +65,7 @@ export function RecordsPane({
   onChanged: () => void
   onEditPage: () => void
   onAddPage: () => void
+  onConnectResult?: (result: ConnectResult) => void
 }) {
   const { t } = useI18n()
   const confirm = useConfirm()
@@ -208,10 +210,11 @@ export function RecordsPane({
     }
   }
 
-  async function connect(row: RecordItem) {
+  async function connect(row: RecordItem, mode: ConnectMode | '' = '') {
     try {
-      const result = await api.connect(row.id)
+      const result = await api.connect(row.id, mode)
       toast.success(t('连接已启动'), translateServerText(result.message))
+      onConnectResult?.(result)
     } catch (err) {
       toast.error(
         t('无法连接'),
