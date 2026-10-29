@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import platform
+import re
 import subprocess
 import sys
 import threading
@@ -22,6 +23,18 @@ from .crypto import is_backup_envelope
 from .store import VaultError, VaultLocked, VaultService
 
 log = logging.getLogger(__name__)
+
+
+# pywebview validates every dialog filter with ^([\w ]+)\(\*...\)$ before the
+# dialog is created, so a slash or a dash inside the description aborts the call
+# with "… is not a valid file filter". Build the strings here instead.
+_FILTER_LABEL_BAD = re.compile(r"[^0-9A-Za-z_一-鿿 ]+")
+
+
+def file_filter(description: str, patterns: str) -> str:
+    """A filter label pywebview/Win32 accepts: word chars, CJK and spaces."""
+    label = re.sub(r"\s+", " ", _FILTER_LABEL_BAD.sub(" ", description or "")).strip()
+    return f"{label or '文件'} ({patterns.strip()})"
 
 
 class Api:
@@ -139,7 +152,7 @@ class Api:
     def save_recovery_file(self) -> dict:
         def action():
             filename = f"MedSafeVault-恢复密钥-{datetime.now().strftime('%Y%m%d')}.msvkey"
-            path = self._save_dialog(filename, ("恢复密钥文件 (*.msvkey)",))
+            path = self._save_dialog(filename, (file_filter("恢复密钥文件", "*.msvkey"),))
             if not path:
                 return {"cancelled": True}
             path = self._ensure_ext(path, ".msvkey")
@@ -152,7 +165,7 @@ class Api:
 
     def pick_recovery_file(self) -> dict:
         def action():
-            path = self._open_dialog(("恢复密钥文件 (*.msvkey;*.json)", "所有文件 (*.*)"))
+            path = self._open_dialog((file_filter("恢复密钥文件", "*.msvkey;*.json"), file_filter("所有文件", "*.*")))
             if not path:
                 return {"cancelled": True}
             try:
@@ -327,7 +340,7 @@ class Api:
     def files_download(self, session_id: str, remote: str, filename: str = "") -> dict:
         def action():
             name = filename or os.path.basename(remote) or "download"
-            path = self._save_dialog(name, ("所有文件 (*.*)",))
+            path = self._save_dialog(name, (file_filter("所有文件", "*.*"),))
             if not path:
                 return {"cancelled": True}
             result = self._service.files_download(str(session_id), remote, path)
@@ -336,7 +349,7 @@ class Api:
 
     def files_upload(self, session_id: str, remote_dir: str) -> dict:
         def action():
-            path = self._open_dialog(("所有文件 (*.*)",))
+            path = self._open_dialog((file_filter("所有文件", "*.*"),))
             if not path:
                 return {"cancelled": True}
             result = self._service.files_upload(str(session_id), path, remote_dir)
@@ -356,7 +369,8 @@ class Api:
     def preview_excel(self, page_id: int) -> dict:
         def action():
             path = self._open_dialog((
-                "Excel / CSV (*.xlsx;*.xls;*.csv)", "所有文件 (*.*)"
+                file_filter("Excel 和 CSV 工作簿", "*.xlsx;*.xls;*.csv"),
+                file_filter("所有文件", "*.*")
             ))
             if not path:
                 return {"cancelled": True}
@@ -391,7 +405,7 @@ class Api:
                 raise VaultError(f"Excel 密码至少需要 {MIN_WORKBOOK_PASSWORD} 位")
             page = self._service.get_page(int(page_id))
             filename = f"{page['name']}-{datetime.now().strftime('%Y%m%d')}.xlsx"
-            path = self._save_dialog(filename, ("Excel 文件 (*.xlsx)",))
+            path = self._save_dialog(filename, (file_filter("Excel 文件", "*.xlsx"),))
             if not path:
                 return {"cancelled": True}
             path = self._ensure_ext(path, ".xlsx")
@@ -402,7 +416,7 @@ class Api:
         def action():
             page = self._service.get_page(int(page_id))
             filename = f"{page['name']}-导入模板.xlsx"
-            path = self._save_dialog(filename, ("Excel 文件 (*.xlsx)",))
+            path = self._save_dialog(filename, (file_filter("Excel 文件", "*.xlsx"),))
             if not path:
                 return {"cancelled": True}
             path = self._ensure_ext(path, ".xlsx")
@@ -416,7 +430,7 @@ class Api:
             # useless to anyone who does not know it - including the structure.
             payload = self._service.export_backup(password or "")
             filename = f"MedSafeVault-备份-{datetime.now().strftime('%Y%m%d-%H%M')}.msvbackup"
-            path = self._save_dialog(filename, ("加密备份 (*.msvbackup)",))
+            path = self._save_dialog(filename, (file_filter("加密备份", "*.msvbackup"),))
             if not path:
                 return {"cancelled": True}
             path = self._ensure_ext(path, ".msvbackup")
@@ -427,7 +441,7 @@ class Api:
 
     def pick_backup(self) -> dict:
         def action():
-            path = self._open_dialog(("加密备份 (*.msvbackup;*.json)", "所有文件 (*.*)"))
+            path = self._open_dialog((file_filter("加密备份", "*.msvbackup;*.json"), file_filter("所有文件", "*.*")))
             if not path:
                 return {"cancelled": True}
             try:
@@ -488,7 +502,12 @@ class Api:
             if field not in self._PROGRAM_FIELDS:
                 raise VaultError("不支持的程序类型")
             label, exe = self._PROGRAM_FIELDS[field]
-            path = self._open_dialog((f"{label} ({exe})", "可执行文件 (*.exe)"))
+            # The expected file name cannot go into the pattern (pywebview only
+            # accepts '*'-prefixed ones), so it stays in the dialog title area
+            # via the label and the pattern is the generic exe filter.
+            path = self._open_dialog((
+                file_filter(f"{label} 程序", "*.exe"), file_filter("所有文件", "*.*")
+            ))
             if not path:
                 return {"cancelled": True}
             settings = self._service.set_settings({field: path})

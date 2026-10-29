@@ -128,5 +128,49 @@ try:
 except Exception:
     pass
 
+# ------------------------------------------------------- file dialog filters
+# pywebview parses every filter with ^([\w ]+)\(\*(...)\)$ *before* showing the
+# dialog, so "Excel / CSV (*.xlsx;...)" used to abort the import menu with
+# "… is not a valid file filter". backend.api.file_filter now sanitises labels.
+import re  # noqa: E402
+
+from backend.api import file_filter  # noqa: E402
+
+try:
+    from webview.util import parse_file_type  # noqa: E402
+except Exception:  # pywebview missing (should not happen in the venv)
+    parse_file_type = None
+
+LABELS = [
+    ("Excel 和 CSV 工作簿", "*.xlsx;*.xls;*.csv"),
+    ("Excel 文件", "*.xlsx"),
+    ("恢复密钥文件", "*.msvkey;*.json"),
+    ("加密备份", "*.msvbackup"),
+    ("加密备份", "*.msvbackup;*.json"),
+    ("所有文件", "*.*"),
+    ("SecureCRT 程序", "*.exe"),
+    ("PuTTY 程序", "*.exe"),
+    ("Excel / CSV", "*.xlsx"),          # slash has to go
+    ("WinSCP ( portable )", "*.exe"),   # brackets have to go
+    ("///", "*.xls"),                   # nothing left -> 文件
+]
+for description, patterns in LABELS:
+    text = file_filter(description, patterns)
+    if parse_file_type:
+        label, parsed = parse_file_type(text)
+        assert parsed == patterns, (text, parsed)
+        assert re.fullmatch(r"[\w ]+", label), (text, label)
+    assert text.endswith(f"({patterns})"), text
+assert file_filter("Excel / CSV", "*.xlsx") == "Excel CSV (*.xlsx)", file_filter("Excel / CSV", "*.xlsx")
+assert file_filter("///", "*.xls") == "文件 (*.xls)"
+print("file filters ->", len(LABELS), "labels accepted by pywebview")
+
+# No call site may hand-write a filter again.
+api_src = (Path(__file__).resolve().parent.parent / "backend" / "api.py").read_text(encoding="utf-8")
+handwritten = re.findall(r'"[^"\n]*\(\*\.[^"\n]*"', api_src)
+assert not handwritten, f"api.py 里还有手写过滤器：{handwritten}"
+assert api_src.count("file_filter(") >= 12, api_src.count("file_filter(")
+print("api.py -> every dialog filter goes through file_filter")
+
 print("\nALL EXCEL CHECKS PASSED")
 service.close()
