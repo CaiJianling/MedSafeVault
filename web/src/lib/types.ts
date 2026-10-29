@@ -203,6 +203,8 @@ export interface RecordItem {
   page_id: number
   title: string
   cells: Record<string, RecordCell>
+  /** Manual row order slot; the list is sorted by it when no column sort is on. */
+  sort_order?: number
   created_at: string
   updated_at: string
   deleted_at: string | null

@@ -231,6 +231,12 @@ class Api:
     def delete_records(self, record_ids: list) -> dict:
         return self._guard(lambda: self._service.delete_records(list(record_ids or [])))
 
+    def reorder_records(self, page_id: int, ordered_ids: list) -> dict:
+        """Manual row order: the ids as the user currently sees them."""
+        return self._guard(lambda: self._service.reorder_records(
+            int(page_id), list(ordered_ids or [])
+        ))
+
     def suggest_values(self, page_id: int, key: str, query: str = "",
                        limit: int = 10) -> dict:
         return self._guard(lambda: self._service.suggest_values(

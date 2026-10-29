@@ -162,7 +162,14 @@ export function RecordsPane({
 
   function sortBy(key: string) {
     if (sortKey === key) {
-      setSortDir((value) => (value === 'asc' ? 'desc' : 'asc'))
+      if (sortDir === 'asc') {
+        setSortDir('desc')
+      } else {
+        // Third click leaves the column view and returns to the manual order,
+        // which is also what re-enables the row drag handle.
+        setSortKey(null)
+        setSortDir('asc')
+      }
     } else {
       setSortKey(key)
       setSortDir('asc')
@@ -170,6 +177,24 @@ export function RecordsPane({
     setOffset(0)
   }
 
+  // Manual order only makes sense while the list shows that order; a column
+  // sort is a view, so the drag handle goes idle.
+  const canReorder = !sortKey && rows.length > 1
+
+  async function applyOrder(next: number[]) {
+    if (!page || next.length < 2) return
+    const previous = rows
+    const byId = new Map(previous.map((row) => [row.id, row]))
+    const reordered = next.map((id) => byId.get(id)).filter(Boolean) as RecordItem[]
+    if (reordered.length !== previous.length) return
+    setRows(reordered)
+    try {
+      await api.reorderRecords(page.id, next)
+    } catch (err) {
+      setRows(previous)
+      toast.error(t('调整顺序失败'), err instanceof ApiError ? err.message : t('请重试'))
+    }
+  }
   function jumpToPage(raw: string) {
     setPageInput('')
     const target = Math.round(Number(raw))
@@ -623,6 +648,7 @@ export function RecordsPane({
             sortKey={sortKey}
             sortDir={sortDir}
             selected={selected}
+            canReorder={canReorder}
             onSort={sortBy}
             onEdit={openEdit}
             onDelete={removeRecord}
@@ -630,6 +656,7 @@ export function RecordsPane({
             onToggleRow={toggleRow}
             onToggleAll={toggleAll}
             onRowMenu={(row, position) => setRowMenu({ row, ...position })}
+            onReorder={(ids) => void applyOrder(ids)}
           />
         )}
 

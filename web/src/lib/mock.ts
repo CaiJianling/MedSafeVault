@@ -2107,6 +2107,29 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         }
         return { values: seen }
       }
+      case 'reorder_records': {
+        requireUnlocked()
+        const pageId = Number(args[0])
+        const wanted: number[] = []
+        for (const raw of Array.isArray(args[1]) ? args[1] : []) {
+          const id = Number(raw)
+          if (Number.isFinite(id) && !wanted.includes(id)) wanted.push(id)
+        }
+        const picked = wanted
+          .map((id) => records.find((item) => item.id === id && !item.deleted_at))
+          .filter((item): item is MockRecord => Boolean(item && item.page_id === pageId))
+        if (picked.length < 2) return { ok: true, moved: 0, skipped: [] }
+        // Same rule as the backend: the selection is permuted inside the slots
+        // it already occupies, so rows outside the selection do not move.
+        const slots = picked.map((item) => records.indexOf(item)).sort((a, b) => a - b)
+        const byId = new Map(picked.map((item) => [item.id, item]))
+        const ordered = wanted.map((id) => byId.get(id)).filter(Boolean) as MockRecord[]
+        ordered.forEach((item, index) => {
+          records[slots[index]] = item
+        })
+        pushHistory('move_record', 'record', ordered[0].id, pageId, `调整 ${ordered.length} 行顺序`)
+        return { ok: true, moved: ordered.length, skipped: [] }
+      }
       case 'delete_records': {
         requireUnlocked()
         const ids = (Array.isArray(args[0]) ? args[0] : []).map((id) => Number(id))

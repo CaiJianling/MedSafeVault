@@ -768,13 +768,20 @@ export function ContextMenu({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
+    // Close on page scroll, but not when the menu itself is the thing being
+    // scrolled — a long menu has to stay open while you wheel through it.
+    const onScroll = (event: Event) => {
+      const target = event.target
+      if (target instanceof Node && menuRef.current?.contains(target)) return
+      onClose()
+    }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKey)
-    document.addEventListener('scroll', onClose, true)
+    document.addEventListener('scroll', onScroll, true)
     return () => {
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKey)
-      document.removeEventListener('scroll', onClose, true)
+      document.removeEventListener('scroll', onScroll, true)
     }
   }, [position, onClose])
 

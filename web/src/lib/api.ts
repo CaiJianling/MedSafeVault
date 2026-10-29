@@ -253,6 +253,12 @@ export const api = {
     call<{ ok: boolean; record_id: number; page_id: number }>('delete_record', recordId),
   deleteRecords: (recordIds: number[]) =>
     call<{ ok: boolean; moved: number[]; skipped: number }>('delete_records', recordIds),
+  reorderRecords: (pageId: number, orderedIds: number[]) =>
+    call<{ ok: boolean; moved: number; skipped: number[] }>(
+      'reorder_records',
+      pageId,
+      orderedIds,
+    ),
   suggestValues: (pageId: number, key: string, query = '', limit = 10) =>
     call<{ values: string[] }>('suggest_values', pageId, key, query, limit),
   revealSecret: (recordId: number, key: string) =>

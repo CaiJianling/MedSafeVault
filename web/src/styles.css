@@ -849,10 +849,26 @@
   /* Selection column: declared after the :first-child padding rules above so
      the checkbox is centred in both axes instead of hugging the left edge. */
   .msv-table thead th.col-check,
-  .msv-table tbody td.col-check {
+  .msv-table tbody td.col-check,
+  .msv-table thead th.col-handle,
+  .msv-table tbody td.col-handle {
     padding: 0;
     text-align: center;
     line-height: 0;
+  }
+
+  /* Row drag & drop: the marker is an inset shadow so the row never changes
+     height while you drag over it. */
+  .msv-table tbody tr[data-dnd='above'] > td {
+    box-shadow: inset 0 2px 0 0 var(--msv-accent);
+  }
+
+  .msv-table tbody tr[data-dnd='below'] > td {
+    box-shadow: inset 0 -2px 0 0 var(--msv-accent);
+  }
+
+  .msv-table tbody tr[data-source='true'] > td {
+    opacity: 0.45;
   }
 
   .msv-table tbody tr:last-child td {

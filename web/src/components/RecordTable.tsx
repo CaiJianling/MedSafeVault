@@ -4,6 +4,7 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
+  GripVertical,
   Pencil,
   Trash2,
 } from 'lucide-react'
@@ -18,6 +19,19 @@ import { IconButton, Tip } from './primitives'
 import { SecretCell } from './SecretCell'
 
 const CHECK_WIDTH = 38
+const HANDLE_WIDTH = 26
+
+/** Move `fromId` next to `overId` inside the visible rows. */
+function orderWithMove(ids: number[], fromId: number, overId: number, above: boolean) {
+  const from = ids.indexOf(fromId)
+  if (from < 0 || fromId === overId) return ids
+  const rest = ids.filter((id) => id !== fromId)
+  const target = rest.indexOf(overId)
+  if (target < 0) return ids
+  const next = [...rest]
+  next.splice(above ? target : target + 1, 0, fromId)
+  return next
+}
 
 function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   if (!active) {
@@ -123,6 +137,7 @@ export function RecordTable({
   sortKey,
   sortDir,
   selected,
+  canReorder,
   onSort,
   onEdit,
   onDelete,
@@ -130,6 +145,7 @@ export function RecordTable({
   onToggleRow,
   onToggleAll,
   onRowMenu,
+  onReorder,
 }: {
   columns: Column[]
   rows: RecordItem[]
@@ -138,6 +154,7 @@ export function RecordTable({
   sortKey: string | null
   sortDir: 'asc' | 'desc'
   selected: Set<number>
+  canReorder: boolean
   onSort: (key: string) => void
   onEdit: (row: RecordItem) => void
   onDelete: (row: RecordItem) => void
@@ -145,13 +162,43 @@ export function RecordTable({
   onToggleRow: (row: RecordItem) => void
   onToggleAll: (checked: boolean) => void
   onRowMenu: (row: RecordItem, position: { x: number; y: number }) => void
+  onReorder: (orderedIds: number[]) => void
 }) {
   const { t } = useI18n()
+  // Dragging is armed by the handle only, so a normal click on a row never
+  // turns into a drag.
+  const [armed, setArmed] = useState<number | null>(null)
+  const [dragging, setDragging] = useState<number | null>(null)
+  const [dropAt, setDropAt] = useState<{ id: number; above: boolean } | null>(null)
+  const dragRow = useRef<number | null>(null)
+
+  function commitOrder(next: number[]) {
+    const current = rows.map((row) => row.id)
+    if (next.length < 2 || next.every((id, index) => id === current[index])) return
+    onReorder(next)
+  }
+
+  function moveWithKeys(row: RecordItem, delta: number) {
+    const ids = rows.map((item) => item.id)
+    const from = ids.indexOf(row.id)
+    const to = from + delta
+    if (from < 0 || to < 0 || to >= ids.length) return
+    const next = [...ids]
+    next.splice(to, 0, ...next.splice(from, 1))
+    commitOrder(next)
+  }
+
+  function resetDrag() {
+    setArmed(null)
+    setDragging(null)
+    setDropAt(null)
+    dragRow.current = null
+  }
 
   // Frozen columns are pinned after the selection column, so their offsets all
-  // shift right by the checkbox width.
+  // shift right by the handle plus checkbox width.
   const frozenLeft = new Map<string, number>()
-  let frozenWidth = CHECK_WIDTH
+  let frozenWidth = CHECK_WIDTH + HANDLE_WIDTH
   let lastFrozenKey: string | null = null
   for (const column of columns) {
     if (!column.frozen) continue
@@ -172,8 +219,13 @@ export function RecordTable({
         <thead>
           <tr>
             <th
-              className="col-check sticky left-0 z-[5] w-[38px] min-w-[38px] border-r border-line bg-[var(--msv-table-head)]"
-              style={{ width: CHECK_WIDTH }}
+              className="col-handle sticky left-0 z-[5] w-[26px] min-w-[26px] border-r border-line bg-[var(--msv-table-head)]"
+              style={{ width: HANDLE_WIDTH }}
+              aria-label={t('行顺序')}
+            />
+            <th
+              className="col-check sticky z-[5] w-[38px] min-w-[38px] border-r border-line bg-[var(--msv-table-head)]"
+              style={{ width: CHECK_WIDTH, left: HANDLE_WIDTH }}
             >
               <RowCheckbox
                 label={t('全选本页')}
@@ -203,6 +255,7 @@ export function RecordTable({
                   <button
                     type="button"
                     disabled={column.masked}
+                    title={active ? t('再次点击可恢复手动顺序') : undefined}
                     onClick={() => onSort(column.key)}
                     className={cn(
                       'group/th inline-flex items-center gap-1.5 transition-colors',
@@ -237,7 +290,11 @@ export function RecordTable({
           {loading
             ? Array.from({ length: 7 }).map((_, rowIndex) => (
                 <tr key={`skeleton-${rowIndex}`}>
-                  <td className="col-check sticky left-0 z-[2] bg-[var(--msv-table-sticky)]" />
+                  <td className="col-handle sticky left-0 z-[2] bg-[var(--msv-table-sticky)]" />
+                  <td
+                    className="col-check sticky z-[2] bg-[var(--msv-table-sticky)]"
+                    style={{ left: HANDLE_WIDTH }}
+                  />
                   {columns.map((column, colIndex) => (
                     <td key={column.key}>
                       <span
@@ -251,11 +308,37 @@ export function RecordTable({
               ))
             : rows.map((row) => {
                 const checked = selected.has(row.id)
+                const target = dropAt && dropAt.id === row.id && dragging !== row.id ? dropAt : null
                 return (
                   <tr
                     key={row.id}
                     className="group/row"
                     data-active={checked || undefined}
+                    data-dnd={target ? (target.above ? 'above' : 'below') : undefined}
+                    data-source={dragging === row.id || undefined}
+                    draggable={canReorder && armed === row.id}
+                    onDragStart={(event) => {
+                      if (!canReorder) return
+                      setDragging(row.id)
+                      dragRow.current = row.id
+                      event.dataTransfer.effectAllowed = 'move'
+                      event.dataTransfer.setData('text/plain', String(row.id))
+                    }}
+                    onDragOver={(event) => {
+                      if (!dragRow.current || dragRow.current === row.id) return
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
+                      const box = event.currentTarget.getBoundingClientRect()
+                      setDropAt({ id: row.id, above: event.clientY - box.top < box.height / 2 })
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      const from = dragRow.current
+                      if (!from || !target) return resetDrag()
+                      commitOrder(orderWithMove(rows.map((item) => item.id), from, row.id, target.above))
+                      resetDrag()
+                    }}
+                    onDragEnd={resetDrag}
                     onDoubleClick={() => onEdit(row)}
                     onContextMenu={(event) => {
                       event.preventDefault()
@@ -263,8 +346,42 @@ export function RecordTable({
                     }}
                   >
                     <td
-                      className="col-check sticky left-0 z-[2] border-r border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]"
-                      style={{ width: CHECK_WIDTH }}
+                      className="col-handle sticky left-0 z-[2] border-r border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]"
+                      style={{ width: HANDLE_WIDTH }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {/* No tooltip: it covered the neighbouring cells and said
+                          nothing a dimmed handle plus a cursor does not. */}
+                      <button
+                        type="button"
+                        aria-label={t('拖动调整顺序')}
+                        disabled={!canReorder}
+                        onKeyDown={(event) => {
+                          if (!canReorder) return
+                          if (event.altKey && event.key === 'ArrowUp') {
+                            event.preventDefault()
+                            moveWithKeys(row, -1)
+                          } else if (event.altKey && event.key === 'ArrowDown') {
+                            event.preventDefault()
+                            moveWithKeys(row, 1)
+                          }
+                        }}
+                        onMouseDown={() => canReorder && setArmed(row.id)}
+                        onMouseUp={() => setArmed(null)}
+                        onMouseLeave={() => setArmed(null)}
+                        className={cn(
+                          'grid size-5 place-items-center rounded text-ice-600 transition',
+                          canReorder
+                            ? 'cursor-grab hover:bg-[var(--msv-tint-strong)] hover:text-ice-300 active:cursor-grabbing'
+                            : 'cursor-not-allowed opacity-40',
+                        )}
+                      >
+                        <GripVertical className="size-3.5" />
+                      </button>
+                    </td>
+                    <td
+                      className="col-check sticky z-[2] border-r border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]"
+                      style={{ width: CHECK_WIDTH, left: HANDLE_WIDTH }}
                       onClick={(event) => event.stopPropagation()}
                     >
                       <RowCheckbox

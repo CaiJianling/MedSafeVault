@@ -397,6 +397,10 @@ const EN: Record<string, string> = {
   '隐藏': 'Hidden',
   '上移': 'Move up',
   '下移': 'Move down',
+  '行顺序': 'Row order',
+  '拖动调整顺序': 'Drag to reorder',
+  '再次点击可恢复手动顺序': 'Click again to return to the manual order',
+  '调整顺序失败': 'Could not reorder',
   '删除列': 'Delete column',
   '列名称': 'Column name',
   '例如：服务器地址': 'e.g. Server address',
@@ -720,6 +724,9 @@ const EN: Record<string, string> = {
   '删除记录「{name}」': 'Moved record {name} to the recycle bin',
   '恢复记录「{name}」': 'Restored record {name}',
   '彻底删除记录「{name}」': 'Deleted record {name} permanently',
+  '调整 {n} 行顺序（「{name}」）':
+    'Reordered {n} row (from {name})|Reordered {n} rows (from {name})',
+  '调整 {n} 行顺序': 'Reordered {n} row|Reordered {n} rows',
   '从 Excel 导入 {n} 条记录到「{name}」':
     'Imported {n} record into {name} from Excel|Imported {n} records into {name} from Excel',
   '清空回收站（{pages} 个页面，{records} 条记录）':
@@ -880,6 +887,14 @@ const EN: Record<string, string> = {
   '说明': 'What it does',
   '打开编辑窗口；也可以点行尾的铅笔图标。': 'Opens the editor; the pencil icon at the end of the row does the same.',
   '快捷菜单：复制整行、编辑、连接、移入回收站。': 'Context menu: copy the row, edit, connect, move to the recycle bin.',
+  '行首拖动手柄': 'Row drag handle',
+  '按住即可把这一行拖到列表里的任意位置，落点用横线提示；顺序会保存，重启后仍是这个样子。':
+    'Hold it to drag the row anywhere in the list; a line marks the drop point. The order is saved and survives a restart.',
+  '先用 Tab 聚焦到某行的拖动手柄，再按 Alt + 方向键逐行上移或下移。':
+    'Focus a row handle with Tab, then press Alt + Up/Down to step the row up or down.',
+  '列标题': 'Column header',
+  '点一次升序、两次降序、三次取消，取消后回到手动顺序（列排序期间拖动手柄会置灰）。':
+    'One click sorts ascending, two descending, three clears it and returns to the manual order (the drag handle is dimmed while a column sort is on).',
   '批量复制或批量移入回收站，顶部会出现批量操作条。': 'Bulk copy or bulk move to the recycle bin; a batch bar appears above the list.',
   '仅显示该单元格一个密码，掩码不会一次性全部展开。': 'Reveals that one cell only; masks are never expanded in bulk.',
   '撤销上一步修改；': 'Undo the last change;',
@@ -1207,6 +1222,11 @@ const SERVER_PATTERNS: [RegExp, string][] = [
   [/^删除记录「(?<name>[^」]*)」$/, '删除记录「{name}」'],
   [/^恢复记录「(?<name>[^」]*)」$/, '恢复记录「{name}」'],
   [/^彻底删除记录「(?<name>[^」]*)」$/, '彻底删除记录「{name}」'],
+  [
+    /^调整 (?<n>\d+) 行顺序（「(?<name>[^」]*)」）$/,
+    '调整 {n} 行顺序（「{name}」）',
+  ],
+  [/^调整 (?<n>\d+) 行顺序$/, '调整 {n} 行顺序'],
   [
     /^从 Excel 导入 (?<n>\d+) 条记录到「(?<name>[^」]*)」$/,
     '从 Excel 导入 {n} 条记录到「{name}」',

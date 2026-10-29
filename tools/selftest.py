@@ -76,6 +76,59 @@ def main() -> None:
     svc.undo()
     check(svc.list_records(server["id"])["total"] == 1, "undo delete restores record")
 
+    print("[4b] manual row order (drag handle / up-down)")
+    ids = [rid]
+    for name in ("排序A", "排序B", "排序C"):
+        created = svc.save_record(server["id"], {**values, "app": name})
+        ids.append(created["record"]["id"])
+
+    def order(page_id=server["id"], query=""):
+        return [row["id"] for row in svc.list_records(page_id, query=query)["rows"]]
+
+    base = order()
+    check(base == ids, f"new records append in creation order ({base})")
+    check(all(row["sort_order"] > 0 for row in svc.list_records(server["id"])["rows"]),
+          "list exposes sort_order")
+
+    moved = [base[-1]] + base[:-1]
+    result = svc.reorder_records(server["id"], moved)
+    check(result["moved"] == len(base), f"reorder reports {result['moved']} moved rows")
+    check(order() == moved, f"reorder applied ({order()})")
+    check(svc.get_history()["items"][0]["action"] == "move_record", "move written to history")
+    svc.undo()
+    check(order() == base, f"undo restores the previous order ({order()})")
+    svc.redo()
+    check(order() == moved, "redo re-applies the order")
+
+    # A search filter only reorders the visible rows; hidden rows keep their slot.
+    visible = [i for i in order() if i != rid]
+    slots_before = {
+        row["id"]: row["sort_order"] for row in svc.list_records(server["id"])["rows"]
+    }
+    svc.reorder_records(server["id"], list(reversed(visible)))
+    filtered = order(query="排序")
+    check(filtered == list(reversed(visible)), f"subset reorder ({filtered})")
+    slots_after = {
+        row["id"]: row["sort_order"] for row in svc.list_records(server["id"])["rows"]
+    }
+    check(slots_after[rid] == slots_before[rid],
+          f"unlisted row keeps its slot ({slots_before[rid]} -> {slots_after[rid]})")
+    check([i for i in order() if i != rid] == list(reversed(visible)),
+          "listed rows follow the new order around the untouched row")
+    svc.undo()
+    check(order() == moved, "undo puts the whole page back")
+
+    # A single row (or an empty list) is a no-op and must not pollute history.
+    before_count = svc.get_history()["total"]
+    check(svc.reorder_records(server["id"], [rid])["moved"] == 0, "one row reorder is a no-op")
+    check(svc.reorder_records(server["id"], [rid, 999999])["moved"] == 0, "unknown ids are skipped")
+    check(svc.get_history()["total"] == before_count, "no-op moves are not logged")
+
+    # Leave the page with exactly the one record later sections assume.
+    for extra in ids[1:]:
+        svc.delete_record(extra, hard=True)
+    check(svc.list_records(server["id"])["total"] == 1, "order test cleaned up")
+
     print("[5] pages CRUD + column config")
     tpl = next(t for t in svc.get_page_templates() if t["id"] == "blank")
     page = svc.create_page({

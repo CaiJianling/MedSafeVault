@@ -77,6 +77,8 @@ MASK = "••••••••"
 HISTORY_APPLIED = 0
 HISTORY_UNDONE = 1
 HISTORY_DISCARDED = 2
+# Bumped whenever _init_schema gains a column; stored in meta(schema_version).
+SCHEMA_VERSION = "4"
 
 COLUMN_TYPES = ("text", "password", "number", "select", "textarea", "date", "url")
 CONNECT_MODES = ("auto", "ssh", "rdp", "telnet", "ftp", "sftp", "vnc")
@@ -318,6 +320,7 @@ class VaultService:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
                     data TEXT NOT NULL DEFAULT '{}',
+                    sort_order INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     deleted_at TEXT
@@ -348,8 +351,24 @@ class VaultService:
                 self.conn.execute(
                     "ALTER TABLE page_columns ADD COLUMN frozen INTEGER NOT NULL DEFAULT 0"
                 )
-            if self._meta_get("schema_version") is None:
-                self._meta_set("schema_version", "3")
+            record_names = {
+                row["name"]
+                for row in self.conn.execute("PRAGMA table_info(records)").fetchall()
+            }
+            if "sort_order" not in record_names:
+                # Manual row order (v4). Existing rows keep the order they had,
+                # which was the autoincrement id.
+                self.conn.execute(
+                    "ALTER TABLE records ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
+                )
+                self.conn.execute("UPDATE records SET sort_order=id")
+            # Created after the ALTER above: on a v3 database the column does not
+            # exist yet while the script runs.
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_records_order ON records(page_id, sort_order)"
+            )
+            if self._meta_get("schema_version") != SCHEMA_VERSION:
+                self._meta_set("schema_version", SCHEMA_VERSION)
 
     def _meta_get(self, key: str, default: str | None = None) -> str | None:
         row = self.conn.execute("SELECT v FROM meta WHERE k=?", (key,)).fetchone()
@@ -1358,6 +1377,18 @@ class VaultService:
                 return value
         return "未命名记录"
 
+    def _next_sort_order(self, page_id: int) -> int:
+        """Row order slot for an appended record (last one plus a gap).
+
+        Slots start at 1 so a real position is never confused with the "0"
+        default of a row created before the column existed.
+        """
+        row = self.conn.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) AS top FROM records WHERE page_id=?",
+            (page_id,),
+        ).fetchone()
+        return int(row["top"]) + 1
+
     def _record_snapshot(self, record_id: int) -> dict | None:
         row = self.conn.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone()
         if not row:
@@ -1366,6 +1397,7 @@ class VaultService:
             "id": row["id"],
             "page_id": row["page_id"],
             "data": _loads(row["data"], {}),
+            "sort_order": row["sort_order"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "deleted_at": row["deleted_at"],
@@ -1375,14 +1407,27 @@ class VaultService:
         if not snap:
             return
         self.conn.execute(
-            "INSERT OR REPLACE INTO records(id,page_id,data,created_at,updated_at,deleted_at)"
-            " VALUES(?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO records(id,page_id,data,sort_order,created_at,updated_at,deleted_at)"
+            " VALUES(?,?,?,?,?,?,?)",
             (
                 snap["id"], snap["page_id"], _json(snap.get("data") or {}),
+                int(snap.get("sort_order") or 0),
                 snap.get("created_at") or now_text(),
-                snap.get("updated_at") or now_text(), snap.get("deleted_at"),
+                snap.get("updated_at") or now_text(),
+                snap.get("deleted_at"),
             ),
         )
+
+    def _restore_row_order(self, snapshot: dict | None) -> None:
+        """Undo/redo support for reorder_records: put the slots back."""
+        for item in (snapshot or {}).get("rows") or []:
+            try:
+                self.conn.execute(
+                    "UPDATE records SET sort_order=? WHERE id=?",
+                    (int(item["sort_order"]), int(item["id"])),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
 
     def _present_record(self, row: sqlite3.Row, cols: list[dict],
                         settings: dict | None = None) -> dict:
@@ -1404,6 +1449,7 @@ class VaultService:
             "page_id": row["page_id"],
             "title": self._record_title(data, cols),
             "cells": cells,
+            "sort_order": row["sort_order"] if "sort_order" in row.keys() else 0,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "deleted_at": row["deleted_at"],
@@ -1420,7 +1466,7 @@ class VaultService:
             cols = self._cols_for_page(page_id)
             rows = self.conn.execute(
                 "SELECT * FROM records WHERE page_id=? AND deleted_at IS NULL"
-                " ORDER BY id ASC",
+                " ORDER BY sort_order ASC, id ASC",
                 (page_id,),
             ).fetchall()
             needle = (query or "").strip().lower()
@@ -1577,15 +1623,80 @@ class VaultService:
                         after = before
                 else:
                     cur = self.conn.execute(
-                        "INSERT INTO records(page_id,data,created_at,updated_at)"
-                        " VALUES(?,?,?,?)",
-                        (page_id, _json(data), stamp, stamp),
+                        "INSERT INTO records(page_id,data,sort_order,created_at,updated_at)"
+                        " VALUES(?,?,?,?,?)",
+                        (page_id, _json(data), self._next_sort_order(page_id), stamp, stamp),
                     )
                     record_id = int(cur.lastrowid)
                     after = self._record_snapshot(record_id)
                     self._log("create_record", "record", record_id, page_id,
                               f"新增记录「{self._record_title(data, cols)}」", None, after)
             return {"record": after, "page_id": page_id}
+
+    def reorder_records(self, page_id: int, ordered_ids: list) -> dict:
+        """Apply a manual row order to the given records.
+
+        ``ordered_ids`` is what the user currently sees (search filter and page
+        slice included). The rows are permuted *within the slots they already
+        occupy*, so hidden rows keep their place and the visible list simply
+        reorders itself.
+        """
+        ids: list[int] = []
+        seen: set[int] = set()
+        for raw in ordered_ids or []:
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if value not in seen:
+                seen.add(value)
+                ids.append(value)
+        with self._lock:
+            self._ensure_unlocked()
+            page = self._page_row(page_id)
+            if page["deleted_at"]:
+                raise VaultError("页面在回收站中，请先恢复")
+            if len(ids) < 2:
+                return {"ok": True, "moved": 0, "skipped": []}
+            marks = ",".join("?" * len(ids))
+            current = {
+                int(r["id"]): int(r["sort_order"])
+                for r in self.conn.execute(
+                    f"SELECT id,sort_order FROM records"
+                    f" WHERE page_id=? AND deleted_at IS NULL AND id IN ({marks})",
+                    (page_id, *ids),
+                ).fetchall()
+            }
+            missing = [i for i in ids if i not in current]
+            present = [i for i in ids if i in current]
+            if len(present) < 2:
+                return {"ok": True, "moved": 0, "skipped": missing}
+            slots = sorted(current.values())
+            before = [{"id": rid, "sort_order": current[rid]} for rid in present]
+            # present[i] takes slots[i]: the first id in the new order gets the
+            # smallest slot the selection already occupies.
+            target = {rid: slot for slot, rid in zip(slots, present)}
+            changed = [rid for rid in present if current[rid] != target[rid]]
+            if not changed:
+                return {"ok": True, "moved": 0, "skipped": missing}
+            with self.conn:
+                for rid in changed:
+                    self.conn.execute(
+                        "UPDATE records SET sort_order=? WHERE id=?", (target[rid], rid)
+                    )
+            after = [{"id": rid, "sort_order": target[rid]} for rid in present]
+            cols = self._cols_for_page(page_id)
+            moved_title = self._record_title(
+                _loads(self.conn.execute(
+                    "SELECT data FROM records WHERE id=?", (changed[0],)).fetchone()["data"], {}),
+                cols,
+            )
+            self._log(
+                "move_record", "record", changed[0], page_id,
+                f"调整 {len(changed)} 行顺序（「{moved_title}」）",
+                {"rows": before}, {"rows": after},
+            )
+            return {"ok": True, "moved": len(changed), "skipped": missing}
 
     def delete_record(self, record_id: int, hard: bool = False) -> dict:
         with self._lock:
@@ -1894,6 +2005,8 @@ class VaultService:
         elif action == "restore_record":
             if before:
                 self._apply_record_snapshot(before)
+        elif action == "move_record":
+            self._restore_row_order(before)
         elif action == "create_page":
             if after:
                 self._hard_delete_page(after["page"]["id"])
@@ -1930,6 +2043,8 @@ class VaultService:
         elif action == "restore_record":
             if after:
                 self._apply_record_snapshot(after)
+        elif action == "move_record":
+            self._restore_row_order(after)
         elif action == "create_page":
             if after:
                 self._insert_page_snapshot(after)
@@ -2170,13 +2285,16 @@ class VaultService:
                 raise VaultError("没有读取到可导入的数据")
             stamp = now_text()
             snapshots = []
+            next_order = self._next_sort_order(page_id)
             with self.conn:
                 for values in rows:
                     data = self._pack_values(cols, values)
                     cur = self.conn.execute(
-                        "INSERT INTO records(page_id,data,created_at,updated_at) VALUES(?,?,?,?)",
-                        (page_id, _json(data), stamp, stamp),
+                        "INSERT INTO records(page_id,data,sort_order,created_at,updated_at)"
+                        " VALUES(?,?,?,?,?)",
+                        (page_id, _json(data), next_order, stamp, stamp),
                     )
+                    next_order += 1
                     snapshots.append(self._record_snapshot(int(cur.lastrowid)))
                 self._log(
                     "import_records", "record", None, page_id,
@@ -2673,11 +2791,12 @@ class VaultService:
                     )
                 for r in records:
                     self.conn.execute(
-                        "INSERT INTO records(id,page_id,data,created_at,updated_at,deleted_at)"
-                        " VALUES(?,?,?,?,?,?)",
+                        "INSERT INTO records(id,page_id,data,sort_order,created_at,updated_at,deleted_at)"
+                        " VALUES(?,?,?,?,?,?,?)",
                         (
                             r.get("id"), r.get("page_id"),
                             _json(r.get("data") or {}),
+                            int(r.get("sort_order") or r.get("id") or 0),
                             r.get("created_at") or now_text(),
                             r.get("updated_at") or now_text(), r.get("deleted_at"),
                         ),

@@ -4,6 +4,7 @@ import {
   History,
   Layers,
   Lock,
+  MoveVertical,
   Pencil,
   Plus,
   Redo2,
@@ -68,6 +69,11 @@ const ACTION_META: Record<string, { label: string; tone: string; icon: LucideIco
     label: 'Excel 导入',
     tone: 'text-indigo-300 border-indigo-400/25 bg-indigo-400/10',
     icon: Upload,
+  },
+  move_record: {
+    label: '调整顺序',
+    tone: 'text-sky-300 border-sky-400/25 bg-sky-400/10',
+    icon: MoveVertical,
   },
   restore_backup: {
     label: '恢复备份',
