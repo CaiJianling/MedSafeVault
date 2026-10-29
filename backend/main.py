@@ -16,6 +16,7 @@ from backend import __version__, paths
 from backend.api import Api
 from backend.paths import data_dir, log_path, resource_path, web_dir
 from backend.store import VaultService
+from backend import window_state
 from backend.tray import TrayIcon
 
 log = logging.getLogger("medsafe")
@@ -134,6 +135,29 @@ def fit_window_to_screen(window: webview.Window) -> None:
         log.debug("window resize failed", exc_info=True)
 
 
+def apply_window_geometry(window: webview.Window) -> None:
+    """Open where the user left the window last time, or maximized.
+
+    Runs on the start() worker thread once the native handle exists, so the
+    placement can be read and set through Win32 in physical pixels. Anything
+    that does not clearly fit the current desktop falls back to maximized —
+    a window the user cannot see or reach is worse than a maximized one.
+    """
+    handle = window_state.wait_hwnd(window)
+    state = window_state.load()
+    kind, rect = window_state.plan(state, handle)
+    log.info("window geometry: handle=%s plan=%s rect=%s saved=%s", handle, kind, rect, state)
+    if kind == "restore" and rect:
+        window_state.apply(handle, rect)
+        return
+    if kind == "restore":
+        # Non-Windows dev fallback: nothing to plan from, keep the default size.
+        fit_window_to_screen(window)
+        return
+    window_state.maximize(handle)
+    log.info("window opened maximized (%s)", "first run" if not state else "saved state")
+
+
 def message_box(title: str, text: str, error: bool = False) -> None:
     try:
         flags = 0x10 if error else 0x40
@@ -194,12 +218,16 @@ def main() -> int:
 
     # pywebview 6 keeps the serving/storage options on start(); create_window()
     # only takes window geometry, behaviour and the js_api bridge.
+    # First run opens maximized; later runs reopen at the last closed position
+    # (applied in apply_window_geometry once the native handle exists).
+    first_run = window_state.load() is None
     window = webview.create_window(
         "MedSafeVault · 医安密管平台",
         url=dev_url or str(index),
         js_api=api,
         width=1460,
         height=930,
+        maximized=first_run,
         min_size=(1140, 700),
         background_color="#0a0e17",
         text_select=True,
@@ -228,7 +256,7 @@ def main() -> int:
 
     try:
         webview.start(
-            func=fit_window_to_screen,
+            func=apply_window_geometry,
             args=(window,),
             debug=debug,
             http_server=not dev_url,

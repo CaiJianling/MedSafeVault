@@ -16,6 +16,7 @@ import webview
 from . import __version__
 from . import clipboard
 from . import paths
+from . import window_state
 from .paths import LocationError, data_dir
 from .crypto import is_backup_envelope
 from .store import VaultError, VaultLocked, VaultService
@@ -575,6 +576,9 @@ class Api:
     # ------------------------------------------------------------ close/tray
     def on_window_closing(self) -> bool:
         """Runs on the UI thread when the user clicks the window X."""
+        # Record the placement first: this handler runs for the tray-hide, the
+        # prompt and the real quit, so the next start can reopen in the same spot.
+        window_state.remember(self._window)
         if self._force_close:
             return True
         try:
