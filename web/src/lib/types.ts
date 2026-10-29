@@ -332,6 +332,10 @@ export interface ExcelPreview {
   unmatched: string[]
   rows: number
   samples: Record<string, string>[]
+  /** How many rows the dialog may list and tick individually. */
+  preview_limit?: number
+  /** False for very large files: those are always imported whole. */
+  selectable?: boolean
   path: string
   page_id: number
 }

@@ -77,6 +77,49 @@ assert imported["count"] == preview["rows"], imported
 assert service.list_records(page["id"])["total"] == before + imported["count"]
 print("import with password:", imported["count"], "rows")
 
+# --------------------------------------------------- picking individual rows
+# Export a multi-row sheet, then import only two of the rows by index.
+for index in range(4):
+    picked_values = {column["key"]: f"p{index}-{column['key']}" for column in columns}
+    for column in columns:
+        if column["type"] == "password":
+            picked_values[column["key"]] = f"Pick#{index}2026"
+    service.save_record(page["id"], picked_values)
+multi = WORKDIR / "multi.xlsx"
+service.export_excel(page["id"], str(multi))
+multi_preview = service.preview_excel(page["id"], str(multi))
+assert multi_preview["rows"] >= 5, multi_preview
+assert len(multi_preview["samples"]) == multi_preview["rows"], "preview lists every row"
+assert multi_preview["selectable"] is True and multi_preview["preview_limit"] >= 300
+print("preview ->", multi_preview["rows"], "rows listed,", "selectable:", multi_preview["selectable"])
+
+titles = [sample[columns[0]["key"]] for sample in multi_preview["samples"]]
+before_pick = service.list_records(page["id"])["total"]
+picked = service.import_excel(page["id"], str(multi), "", [3, 0, 3, 99, -1])
+assert picked["count"] == 2, picked
+after_rows = service.list_records(page["id"])["rows"]
+assert len(after_rows) == before_pick + 2
+new_titles = [row["cells"][columns[0]["key"]]["value"] for row in after_rows][-2:]
+# indices are de-duplicated, clamped and kept in file order -> [0, 3]
+assert new_titles == [titles[0], titles[3]], (new_titles, titles)
+print("picked rows [3,0] ->", picked["count"], "records:", new_titles)
+
+rejected = ""
+for bad in ([], ["x"], [42], [99]):
+    try:
+        service.import_excel(page["id"], str(multi), "", bad)
+        raise AssertionError(f"无效勾选应该被拒绝: {bad}")
+    except VaultError as err:
+        assert "至少勾选一行" in str(err), err
+        rejected = str(err)
+print("empty / non-numeric / out-of-range selection ->", rejected)
+
+# No indices at all still means "the whole file".
+whole = service.import_excel(page["id"], str(multi))
+assert whole["count"] == multi_preview["rows"], (whole, multi_preview)
+print("no selection -> whole file:", whole["count"], "rows")
+service.undo()
+
 # ------------------------------------------------------------------ validation
 short = WORKDIR / "short.xlsx"
 try:

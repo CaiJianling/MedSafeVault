@@ -1275,7 +1275,7 @@ export function SettingsDialog({
                       type="button"
                       onClick={restoreBackup}
                       disabled={restoring || !backupInfo}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-rose-500 px-3.5 text-[0.75rem] font-medium text-white transition hover:bg-rose-400 disabled:opacity-50"
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--danger)] px-3.5 text-[0.75rem] font-medium text-[var(--danger-foreground)] transition hover:brightness-110 disabled:opacity-50"
                     >
                       {restoring && <Spinner className="size-3.5" />}
                       {t('覆盖并恢复')}
@@ -1375,7 +1375,7 @@ export function SettingsDialog({
                     type="button"
                     disabled={!customPath.trim() || locationBusy}
                     onClick={() => requestLocation('custom', customPath.trim())}
-                    className="h-9 rounded-lg bg-[var(--msv-accent)] px-3.5 text-[0.75rem] font-medium text-white transition hover:brightness-110 disabled:opacity-50"
+                    className="h-9 rounded-lg bg-[var(--msv-accent)] px-3.5 text-[0.75rem] font-medium text-[var(--msv-accent-contrast)] transition hover:brightness-110 disabled:opacity-50"
                   >
                     {t('使用此目录')}
                   </button>

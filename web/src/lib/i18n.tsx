@@ -606,6 +606,13 @@ const EN: Record<string, string> = {
   '加密字段已隐藏': 'Encrypted field hidden',
   '预览仅展示前 8 列，其余 {n} 列也会正常导入。':
     'Preview shows the first 8 columns; the other {n} will still be imported.',
+  '已选 {p} / {t} 行': '{p} of {t} rows picked',
+  '全选': 'Select all',
+  '选择该行': 'Include this row',
+  '取消勾选的行不会写入；默认全部导入。':
+    'Unticked rows are not written. Everything is selected by default.',
+  '文件共 {n} 行，超过 {max} 行时只能整表导入。':
+    'The file has {n} rows; files larger than {max} rows are imported whole.',
   '导入不会自动去重。若表中已有相同记录，请先导出核对；导入完成后可使用顶部的撤回按钮整体撤销。':
     'Imports are not deduplicated. Export first if the page may contain duplicates. Undo the whole batch from the header.',
 
@@ -877,7 +884,8 @@ const EN: Record<string, string> = {
   'Excel 导入导出': 'Excel import and export',
   '列表右上角「Excel」下拉菜单：下载模板、导入、导出当前页。': 'The Excel menu at the top right of the list: download a template, import, or export the current page.',
   '模板按当前页的列生成，第一行是列名；导入支持 xlsx / xls / csv，无需安装 Office。': 'The template follows the columns of the current page with the header in the first row; import accepts xlsx / xls / csv and needs no Office install.',
-  '导入前会显示列映射与样例预览，对不上的列留空，可先小批量试导。': 'Before importing you see the column mapping and a sample preview; unmatched columns stay empty — try a small batch first.',
+  '导入前会显示列映射与数据预览，每一行都有勾选框且默认全选，取消勾选的行不会写入；也可以直接「全选 / 清空」。':
+    'Before importing you see the column mapping and every row with a checkbox, all ticked by default; untick the rows you do not want, or use Select all / Clear.',
   '导出包含密码列的明文，请在共享盘上注意访问权限；如果只是交接，建议改用加密备份。': 'Exports contain plaintext passwords, so watch the permissions on any share; for handovers prefer the encrypted backup.',
   '行内链接按钮或右键菜单可直接连接：RDP、SecureCRT 会话、浏览器打开地址。': 'The inline link button or the row context menu connects directly: RDP, a SecureCRT session, or opening the address in a browser.',
   'RDP 会在数据目录生成带用户名与端口的临时 .rdp 文件再调用系统 mstsc；端口、地址取自该行的列值。': 'For RDP a temporary .rdp file carrying the username and port is written into the data folder and handed to the system mstsc; address and port come from that row.',

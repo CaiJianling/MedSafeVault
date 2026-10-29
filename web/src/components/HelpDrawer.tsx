@@ -197,7 +197,7 @@ export function HelpDrawer({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--msv-accent)] px-3 text-[0.75rem] font-medium text-white transition hover:brightness-110"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--msv-accent)] px-3 text-[0.75rem] font-medium text-[var(--msv-accent-contrast)] transition hover:brightness-110"
             >
               <X className="size-3.5" />
               {t('关闭')}
@@ -356,7 +356,7 @@ export function HelpDrawer({
               t('列表右上角「Excel」下拉菜单：下载模板、导入、导出当前页。'),
               t('模板按当前页的列生成，第一行是列名；导入支持 xlsx / xls / csv，无需安装 Office。'),
               t('导出时可勾选「用密码保护工作簿」，Excel 打开时会要求输入这个密码；导入带打开密码的 .xlsx / .xls 文件时会先弹窗要求验证，解密只在内存中进行。'),
-              t('导入前会显示列映射与样例预览，对不上的列留空，可先小批量试导。'),
+              t('导入前会显示列映射与数据预览，每一行都有勾选框且默认全选，取消勾选的行不会写入；也可以直接「全选 / 清空」。'),
               t('导出包含密码列的明文，请在共享盘上注意访问权限；如果只是交接，建议改用加密备份。'),
             ]}
           />

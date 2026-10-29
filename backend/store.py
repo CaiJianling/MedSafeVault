@@ -79,6 +79,8 @@ HISTORY_UNDONE = 1
 HISTORY_DISCARDED = 2
 # Bumped whenever _init_schema gains a column; stored in meta(schema_version).
 SCHEMA_VERSION = "4"
+# Rows the Excel import dialog can show and tick individually.
+IMPORT_PREVIEW_ROWS = 300
 
 COLUMN_TYPES = ("text", "password", "number", "select", "textarea", "date", "url")
 CONNECT_MODES = ("auto", "ssh", "rdp", "telnet", "ftp", "sftp", "vnc")
@@ -2266,12 +2268,19 @@ class VaultService:
             from . import excelio
 
             cols = self.get_columns(page_id, include_hidden=True)
-            result = excelio.preview(path, cols, password=password)
+            # Enough rows to let the import dialog tick individual lines; bigger
+            # files fall back to "import everything" (see selectable below).
+            result = excelio.preview(
+                path, cols, max_sample=IMPORT_PREVIEW_ROWS, password=password
+            )
             result["path"] = path
             result["page_id"] = page_id
+            result["preview_limit"] = IMPORT_PREVIEW_ROWS
+            result["selectable"] = int(result.get("rows") or 0) <= IMPORT_PREVIEW_ROWS
             return result
 
-    def import_excel(self, page_id: int, path: str, password: str = "") -> dict:
+    def import_excel(self, page_id: int, path: str, password: str = "",
+                     indices: list | None = None) -> dict:
         with self._lock:
             self._ensure_unlocked()
             from . import excelio
@@ -2283,6 +2292,21 @@ class VaultService:
             rows = excelio.read_rows(path, cols, password=password)
             if not rows:
                 raise VaultError("没有读取到可导入的数据")
+            if indices is not None:
+                chosen: list[int] = []
+                seen: set[int] = set()
+                for raw in indices:
+                    try:
+                        index = int(raw)
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= index < len(rows) and index not in seen:
+                        seen.add(index)
+                        chosen.append(index)
+                if not chosen:
+                    raise VaultError("请至少勾选一行要导入的数据")
+                # Keep the file order so the imported rows land in a sane sequence.
+                rows = [rows[index] for index in sorted(chosen)]
             stamp = now_text()
             snapshots = []
             next_order = self._next_sort_order(page_id)

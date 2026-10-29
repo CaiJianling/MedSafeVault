@@ -6,7 +6,7 @@ import {
   Sheet,
   Upload,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
@@ -16,6 +16,35 @@ import { ModalFrame, Spinner } from './primitives'
 
 function basename(path: string): string {
   return path.split(/[\\/]/).pop() || path
+}
+
+/** Same look as the list checkboxes, with an indeterminate head box. */
+function PickCheckbox({
+  checked,
+  indeterminate = false,
+  label,
+  onChange,
+}: {
+  checked: boolean
+  indeterminate?: boolean
+  label: string
+  onChange: (checked: boolean) => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate && !checked
+  }, [indeterminate, checked])
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label={label}
+      className="msv-check"
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      onClick={(event) => event.stopPropagation()}
+    />
+  )
 }
 
 export function ExcelImportDialog({
@@ -36,6 +65,12 @@ export function ExcelImportDialog({
   const { t } = useI18n()
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState('')
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+
+  // Every row starts selected; the user only ticks the ones they want to drop.
+  useEffect(() => {
+    setPicked(new Set((preview?.samples ?? []).map((_, index) => index)))
+  }, [preview])
 
   useEffect(() => {
     if (open) {
@@ -46,12 +81,35 @@ export function ExcelImportDialog({
 
   if (!preview) return null
 
+  const selectable = preview.selectable !== false
+  const totalRows = preview.rows
+  const allPicked = selectable && preview.samples.length > 0 && picked.size === preview.samples.length
+  const somePicked = selectable && picked.size > 0 && !allPicked
+  const importCount = selectable ? picked.size : totalRows
+
+  function toggleRow(index: number) {
+    setPicked((current) => {
+      const next = new Set(current)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
+
+  function setAll(checked: boolean) {
+    setPicked(checked ? new Set(preview!.samples.map((_, index) => index)) : new Set())
+  }
+
   async function runImport() {
     if (importing || !preview) return
     setImporting(true)
     setError('')
     try {
-      const result = await api.importExcel(preview.page_id, preview.path, password)
+      const indices =
+        selectable && picked.size < preview.samples.length
+          ? [...picked].sort((a, b) => a - b)
+          : null
+      const result = await api.importExcel(preview.page_id, preview.path, password, indices)
       toast.success(
         t('导入完成'),
         t('已写入 {n} 条记录，可在修改历史中撤回', { n: result.count }),
@@ -96,11 +154,11 @@ export function ExcelImportDialog({
             <button
               type="button"
               onClick={runImport}
-              disabled={importing || preview.rows === 0}
+              disabled={importing || totalRows === 0 || (selectable && picked.size === 0)}
               className="btn-primary inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[0.78125rem] font-semibold transition hover:brightness-105 disabled:opacity-50"
             >
               {importing ? <Spinner className="size-3.5" /> : <Upload className="size-3.5" />}
-              {t('导入 {n} 条记录', { n: preview.rows })}
+              {t('导入 {n} 条记录', { n: importCount })}
             </button>
           </div>
         </div>
@@ -164,16 +222,58 @@ export function ExcelImportDialog({
             {t('数据预览')}
           </h3>
           <span className="h-px flex-1 bg-line" />
-          <span className="text-[0.6875rem] text-ice-600">
-            {t('最多显示前 {n} 行', { n: preview.samples.length })}
-          </span>
+          {selectable ? (
+            <>
+              <span className="text-[0.6875rem] text-ice-600">
+                {t('已选 {p} / {t} 行', { p: picked.size, t: preview.samples.length })}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAll(true)}
+                className="rounded-md border border-line px-2 py-0.5 text-[0.6875rem] text-ice-400 transition hover:border-line-strong hover:bg-[var(--msv-tint)] hover:text-ice-200"
+              >
+                {t('全选')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAll(false)}
+                className="rounded-md border border-line px-2 py-0.5 text-[0.6875rem] text-ice-400 transition hover:border-line-strong hover:bg-[var(--msv-tint)] hover:text-ice-200"
+              >
+                {t('清空')}
+              </button>
+            </>
+          ) : (
+            <span className="text-[0.6875rem] text-ice-600">
+              {t('最多显示前 {n} 行', { n: preview.samples.length })}
+            </span>
+          )}
         </div>
+        {!selectable && (
+          <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2 text-[0.71875rem] leading-relaxed text-amber-100">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
+            <span>
+              {t('文件共 {n} 行，超过 {max} 行时只能整表导入。', {
+                n: totalRows,
+                max: preview.preview_limit ?? 300,
+              })}
+            </span>
+          </div>
+        )}
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full border-collapse text-[0.71875rem]">
             <thead>
               <tr className="bg-[var(--msv-table-head)]">
-                <th className="w-10 border-b border-line px-2 py-2 text-left font-mono text-[0.6875rem] font-normal text-ice-600">
-                  #
+                <th className="w-12 border-b border-line px-2 py-2 text-left">
+                  {selectable ? (
+                    <PickCheckbox
+                      label={t('全选')}
+                      checked={allPicked}
+                      indeterminate={somePicked}
+                      onChange={setAll}
+                    />
+                  ) : (
+                    <span className="font-mono text-[0.6875rem] font-normal text-ice-600">#</span>
+                  )}
                 </th>
                 {sampleColumns.map((column) => (
                   <th
@@ -196,33 +296,57 @@ export function ExcelImportDialog({
                   </td>
                 </tr>
               ) : (
-                preview.samples.map((sample, index) => (
-                  <tr key={index} className="border-b border-line/60 last:border-0">
-                    <td className="px-2 py-1.5 font-mono text-[0.6875rem] text-ice-600">
-                      {index + 1}
-                    </td>
-                    {sampleColumns.map((column) => {
-                      const value = sample[column.key] ?? ''
-                      const secret = /^[•·*]+$/.test(value)
-                      return (
-                        <td
-                          key={column.key}
-                          className={cn(
-                            'max-w-[200px] truncate px-2.5 py-1.5',
-                            secret ? 'mask-dots text-[0.71875rem]' : 'text-ice-300',
-                          )}
-                          title={secret ? t('加密字段已隐藏') : value}
-                        >
-                          {value || <span className="text-ice-600">—</span>}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))
+                preview.samples.map((sample, index) => {
+                  const on = picked.has(index)
+                  return (
+                    <tr
+                      key={index}
+                      onClick={() => selectable && toggleRow(index)}
+                      className={cn(
+                        'border-b border-line/60 last:border-0',
+                        selectable && 'cursor-pointer',
+                        on ? 'hover:bg-[var(--msv-tint)]' : 'opacity-55',
+                      )}
+                    >
+                      <td className="px-2 py-1.5">
+                        {selectable ? (
+                          <PickCheckbox
+                            label={t('选择该行')}
+                            checked={on}
+                            onChange={() => toggleRow(index)}
+                          />
+                        ) : (
+                          <span className="font-mono text-[0.6875rem] text-ice-600">{index + 1}</span>
+                        )}
+                      </td>
+                      {sampleColumns.map((column) => {
+                        const value = sample[column.key] ?? ''
+                        const secret = /^[•·*]+$/.test(value)
+                        return (
+                          <td
+                            key={column.key}
+                            className={cn(
+                              'max-w-[200px] truncate px-2.5 py-1.5',
+                              secret ? 'mask-dots text-[0.71875rem]' : 'text-ice-300',
+                            )}
+                            title={secret ? t('加密字段已隐藏') : value}
+                          >
+                            {value || <span className="text-ice-600">—</span>}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
         </div>
+        {selectable && preview.samples.length > 0 && (
+          <p className="mt-1.5 text-[0.6875rem] text-ice-600">
+            {t('取消勾选的行不会写入；默认全部导入。')}
+          </p>
+        )}
         {preview.mapped.length > sampleColumns.length && (
           <p className="mt-1.5 text-[0.6875rem] text-ice-600">
             {t('预览仅展示前 8 列，其余 {n} 列也会正常导入。', {

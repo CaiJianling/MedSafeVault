@@ -1079,6 +1079,7 @@ function pageById(pageId: number): MockPage | undefined {
 
 function demoExcelPreview(page: MockPage, path = DEMO_EXCEL_FILE): ExcelPreview {
   const visible = publicColumns(page).filter((column) => column.visible)
+  const rowCount = 6
   return {
     headers: visible.map((column) => column.label),
     mapped: visible.map((column) => ({
@@ -1087,11 +1088,21 @@ function demoExcelPreview(page: MockPage, path = DEMO_EXCEL_FILE): ExcelPreview 
       header: column.label,
     })),
     unmatched: [],
-    rows: 6,
-    samples: [
-      Object.fromEntries(visible.map((column) => [column.key, column.masked ? MASK : `示例${column.label}`])),
-      Object.fromEntries(visible.map((column) => [column.key, column.masked ? MASK : '—'])),
-    ],
+    rows: rowCount,
+    samples: Array.from({ length: rowCount }, (_, index) =>
+      Object.fromEntries(
+        visible.map((column) => [
+          column.key,
+          column.masked
+            ? MASK
+            : index === 3
+              ? '—'
+              : `示例${column.label}${index + 1}`,
+        ]),
+      ),
+    ),
+    preview_limit: 300,
+    selectable: true,
     path,
     page_id: page.id,
   }
@@ -1950,16 +1961,21 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         requireUnlocked()
         const page = pageById(Number(args[0]))
         if (!page) throw new Error('页面不存在')
+        const raw = Array.isArray(args[3]) ? (args[3] as unknown[]) : null
+        const chosen = raw
+          ? raw.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 0)
+          : [0, 1, 2]
+        if (!chosen.length) throw new Error('请至少勾选一行要导入的数据')
         const stamp = ISO(new Date())
-        for (let i = 0; i < 3; i += 1) {
+        for (const index of chosen) {
           records.push({
             id: Math.max(0, ...records.map((r) => r.id)) + 1,
             page_id: page.id,
             data: {
-              address: `203.0.114.${40 + i}`,
-              app: `导入示例 ${i + 1}`,
+              address: `203.0.114.${40 + index}`,
+              app: `导入示例 ${index + 1}`,
               username: 'demo_import',
-              password: `Import@2026#${i + 1}`,
+              password: `Import@2026#${index + 1}`,
               note: '来自 Excel 演示导入',
             },
             created_at: stamp,
@@ -1967,10 +1983,12 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
             deleted_at: null,
           })
         }
-        pushHistory('import_records', 'record', null, page.id, `从 Excel 导入 3 条记录到「${page.name}」`, [
-          mkChange('导入记录', '', '3 条记录', 'import'),
-        ])
-        return { ok: true, count: 3 }
+        pushHistory(
+          'import_records', 'record', null, page.id,
+          `从 Excel 导入 ${chosen.length} 条记录到「${page.name}」`,
+          [mkChange('导入记录', '', `${chosen.length} 条记录`, 'import')],
+        )
+        return { ok: true, count: chosen.length }
       }
       case 'export_excel': {
         requireUnlocked()

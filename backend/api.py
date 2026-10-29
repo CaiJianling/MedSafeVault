@@ -397,10 +397,13 @@ class Api:
             return {"locked": True, "path": path}
         return {"preview": data}
 
-    def import_excel(self, page_id: int, path: str, password: str = "") -> dict:
-        return self._guard(
-            lambda: self._service.import_excel(int(page_id), path, password or "")
-        )
+    def import_excel(self, page_id: int, path: str, password: str = "",
+                     indices: list | None = None) -> dict:
+        """Import the whole file, or only the rows the user ticked."""
+        return self._guard(lambda: self._service.import_excel(
+            int(page_id), path, password or "",
+            None if indices is None else list(indices),
+        ))
 
     def export_excel(self, page_id: int, password: str = "") -> dict:
         def action():

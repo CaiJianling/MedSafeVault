@@ -336,8 +336,8 @@ export const api = {
       path,
       password,
     ),
-  importExcel: (pageId: number, path: string, password = '') =>
-    call<{ count: number }>('import_excel', pageId, path, password),
+  importExcel: (pageId: number, path: string, password = '', indices: number[] | null = null) =>
+    call<{ count: number }>('import_excel', pageId, path, password, indices),
   exportExcel: (pageId: number, password = '') =>
     call<{ cancelled?: boolean; path?: string; count?: number; sealed?: boolean }>(
       'export_excel',

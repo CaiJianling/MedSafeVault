@@ -130,7 +130,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   className={cn(
                     'h-9 rounded-lg px-4 text-[0.8125rem] font-medium transition disabled:cursor-not-allowed disabled:opacity-40',
                     danger
-                      ? 'bg-rose-500 text-white hover:bg-rose-400'
+                      ? 'bg-[var(--danger)] text-[var(--danger-foreground)] hover:brightness-110'
                       : 'bg-teal-400  hover:bg-teal-300',
                   )}
                   onClick={() => close(true)}

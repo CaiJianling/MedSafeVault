@@ -137,7 +137,7 @@ export function CloseDialog({
                 className={cn(
                   'mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg',
                   active
-                    ? 'bg-[var(--msv-accent)] text-white'
+                    ? 'bg-[var(--msv-accent)] text-[var(--msv-accent-contrast)]'
                     : 'bg-[var(--msv-tint-strong)] text-ice-500',
                 )}
               >
@@ -155,7 +155,7 @@ export function CloseDialog({
                 className={cn(
                   'mt-1 grid size-4 shrink-0 place-items-center rounded-full border',
                   active
-                    ? 'border-[var(--msv-accent)] bg-[var(--msv-accent)] text-white'
+                    ? 'border-[var(--msv-accent)] bg-[var(--msv-accent)] text-[var(--msv-accent-contrast)]'
                     : 'border-line-strong',
                 )}
               >
