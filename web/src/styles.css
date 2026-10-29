@@ -1008,6 +1008,67 @@
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
+/* Terminal workspace: a Material-style circular reveal. --msv-rip-x/y come
+   from the click that opened the workspace (row action or header button) and
+   --msv-rip-r reaches the farthest viewport corner, so the circle covers the
+   whole window without hiding part of a tall screen. */
+.terminal-ripple-in {
+  clip-path: circle(0px at var(--msv-rip-x) var(--msv-rip-y));
+  animation: terminal-ripple-in 380ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.terminal-ripple-out {
+  clip-path: circle(var(--msv-rip-r) at var(--msv-rip-x) var(--msv-rip-y));
+  animation: terminal-ripple-out 280ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes terminal-ripple-in {
+  to { clip-path: circle(var(--msv-rip-r) at var(--msv-rip-x) var(--msv-rip-y)); }
+}
+
+@keyframes terminal-ripple-out {
+  to { clip-path: circle(0px at var(--msv-rip-x) var(--msv-rip-y)); }
+}
+
+/* The dim layer fades on its own: the growing circle is the panel surface,
+   not a black dot that later turns into a panel. */
+.terminal-scrim-in {
+  animation: terminal-scrim-in 200ms ease-out both;
+}
+
+.terminal-scrim-out {
+  animation: terminal-scrim-out 280ms ease-in both;
+}
+
+@keyframes terminal-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes terminal-scrim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* The panel joins the ripple with a restrained lift instead of a full zoom. */
+.terminal-panel-in {
+  animation: terminal-panel-in 340ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.terminal-panel-out {
+  animation: terminal-panel-out 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes terminal-panel-in {
+  from { transform: scale(0.985) translateY(6px); }
+  to { transform: none; }
+}
+
+@keyframes terminal-panel-out {
+  from { transform: none; }
+  to { transform: scale(0.992); }
+}
+
 @keyframes float-slow {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }

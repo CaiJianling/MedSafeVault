@@ -36,9 +36,17 @@ def build_web() -> None:
 
 
 def build_exe() -> None:
-    target = EXE if EXE.exists() else None
-    if target:
-        target.unlink()  # never trust a stale artefact
+    if EXE.exists():
+        try:
+            EXE.unlink()  # never trust a stale artefact
+        except PermissionError:
+            raise SystemExit(
+                f"无法删除旧的 exe：{EXE}\n"
+                "程序仍在运行（关闭窗口后可能还缩在小图标区）。\n"
+                "请先在主窗口退出，或右键通知区域里的 MedSafeVault 图标选择「退出」，"
+                "再重新运行本脚本；命令行可用：\n"
+                "    Stop-Process -Name MedSafeVault -Force"
+            )
     run(
         [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "MedSafeVault.spec"],
         ROOT,

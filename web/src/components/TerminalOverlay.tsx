@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   FolderSync,
   MonitorPlay,
@@ -27,6 +28,37 @@ export interface TerminalTab {
   wsUrl?: string
   pid?: number
   credentials?: { username: string; password: string }
+}
+
+/** Durations live here because the CSS keyframes end a little earlier. */
+const OPEN_MS = 420
+const CLOSE_MS = 300
+
+type OverlayPhase = 'closed' | 'opening' | 'open' | 'closing'
+
+interface Ripple {
+  x: number
+  y: number
+  r: number
+}
+
+/** The header button is the anchor the workspace collapses back into. */
+function terminalButtonCenter(): { x: number; y: number } {
+  const button = document.querySelector<HTMLElement>('[aria-label="连接终端"]')
+  const rect = button?.getBoundingClientRect()
+  if (rect && rect.width > 0) {
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+  return { x: window.innerWidth - 40, y: 36 }
+}
+
+/** Radius reaches the farthest viewport corner, so the circle covers the screen. */
+function rippleAt(point: { x: number; y: number }): Ripple {
+  const x = Math.min(Math.max(point.x, 0), window.innerWidth)
+  const y = Math.min(Math.max(point.y, 0), window.innerHeight)
+  const r =
+    Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y)) + 24
+  return { x, y, r }
 }
 
 function TabIcon({ tab, className }: { tab: TerminalTab; className?: string }) {
@@ -61,6 +93,54 @@ export function TerminalOverlay({
   const confirm = useConfirm()
   const active = tabs.find((tab) => tab.key === activeKey) ?? tabs[0] ?? null
 
+  // The workspace stays mounted (sessions keep running), so the reveal is
+  // driven by a small state machine instead of mount/unmount animations.
+  const [phase, setPhase] = useState<OverlayPhase>(open ? 'opening' : 'closed')
+  const [ripple, setRipple] = useState<Ripple>(() => rippleAt(terminalButtonCenter()))
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+  const wasOpen = useRef(open)
+
+  useEffect(() => {
+    const track = (event: PointerEvent) => {
+      pointer.current = { x: event.clientX, y: event.clientY }
+    }
+    window.addEventListener('pointerdown', track, { capture: true, passive: true })
+    return () => window.removeEventListener('pointerdown', track, { capture: true })
+  }, [])
+
+  useEffect(() => {
+    if (open === wasOpen.current) return
+    wasOpen.current = open
+    if (open) {
+      // Grow from the click that opened the workspace: the row's connect menu
+      // or the header terminal button.
+      setRipple(rippleAt(pointer.current ?? terminalButtonCenter()))
+      setPhase('opening')
+    } else {
+      // Shrink back into the button the workspace belongs to.
+      setRipple(rippleAt(terminalButtonCenter()))
+      setPhase((current) => (current === 'closed' ? current : 'closing'))
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (phase === 'opening') {
+      const timer = window.setTimeout(() => setPhase('open'), OPEN_MS)
+      return () => window.clearTimeout(timer)
+    }
+    if (phase === 'closing') {
+      const timer = window.setTimeout(() => setPhase('closed'), CLOSE_MS)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [phase])
+
+  const rippleStyle = {
+    '--msv-rip-x': `${ripple.x}px`,
+    '--msv-rip-y': `${ripple.y}px`,
+    '--msv-rip-r': `${ripple.r}px`,
+  } as CSSProperties
+
   async function closeTab(tab: TerminalTab) {
     if (tab.kind === 'rdp') {
       const ok = await confirm({
@@ -88,13 +168,39 @@ export function TerminalOverlay({
 
   return (
     <div
+      style={rippleStyle}
       className={cn(
-        'fixed inset-0 z-[70] flex flex-col bg-[#03060c]/80 p-0 backdrop-blur-sm sm:p-3',
-        open ? 'pointer-events-auto' : 'pointer-events-none invisible',
+        'fixed inset-0 z-[70]',
+        phase === 'closed' && 'pointer-events-none invisible',
+        phase === 'closing' && 'pointer-events-none',
+        (phase === 'opening' || phase === 'open') && 'pointer-events-auto',
       )}
-      aria-hidden={!open}
+      aria-hidden={phase === 'closed' || phase === 'closing'}
     >
-      <section className="flex h-full min-h-0 flex-col overflow-hidden border border-line bg-[var(--msv-surface-soft)] shadow-[0_30px_80px_-20px_rgba(0,0,0,.75)] sm:rounded-2xl">
+      {/* Scrim fades while the workspace surface itself grows/shrinks, so the
+          opening reads as a ripple from the trigger instead of a black disc. */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          'absolute inset-0 bg-[#03060c]/80 backdrop-blur-sm',
+          phase === 'opening' && 'terminal-scrim-in',
+          phase === 'closing' && 'terminal-scrim-out',
+        )}
+      />
+      <div
+        className={cn(
+          'absolute inset-0 flex flex-col p-0 sm:p-3',
+          phase === 'opening' && 'terminal-ripple-in',
+          phase === 'closing' && 'terminal-ripple-out',
+        )}
+      >
+        <section
+          className={cn(
+            'flex h-full min-h-0 flex-col overflow-hidden border border-line bg-[var(--msv-surface-soft)] shadow-[0_30px_80px_-20px_rgba(0,0,0,.75)] sm:rounded-2xl',
+            phase === 'opening' && 'terminal-panel-in',
+            phase === 'closing' && 'terminal-panel-out',
+          )}
+        >
         <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
           <span className="inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ice-200">
             <Wifi className="size-4 text-[var(--msv-accent-text)]" />
@@ -224,7 +330,8 @@ export function TerminalOverlay({
             })
           )}
         </div>
-      </section>
+        </section>
+      </div>
     </div>
   )
 }
