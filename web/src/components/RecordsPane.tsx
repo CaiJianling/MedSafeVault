@@ -43,12 +43,42 @@ import {
   PlainButton,
   SelectMenu,
   Spinner,
-  Tip,
 } from './primitives'
 import { RecordDialog } from './RecordDialog'
 import { RecordTable } from './RecordTable'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+
+/** Page buttons shown before the list is windowed with an ellipsis. */
+const PAGE_WINDOW = 7
+
+/**
+ * Which page numbers to render, in the style of HeroUI's TanStack example:
+ * first, last, the current page and its neighbours, with a gap marker wherever
+ * pages are skipped — `1 … 4 5 6 … 12`. A gap is only allowed where it hides at
+ * least two pages, so an ellipsis never replaces a single number.
+ */
+function pageItems(count: number, current: number): (number | 'gap')[] {
+  if (count <= PAGE_WINDOW) return Array.from({ length: count }, (_, index) => index + 1)
+  const keep = new Set([1, count, current - 1, current, current + 1])
+  for (;;) {
+    const pages = [...keep]
+      .filter((page) => page >= 1 && page <= count)
+      .sort((a, b) => a - b)
+    const fill = pages.filter((page, index) => index > 0 && page - pages[index - 1] === 2)
+    if (!fill.length) break
+    fill.forEach((page) => keep.add(page - 1))
+  }
+  const pages = [...keep]
+    .filter((page) => page >= 1 && page <= count)
+    .sort((a, b) => a - b)
+  const items: (number | 'gap')[] = []
+  pages.forEach((page, index) => {
+    if (index > 0 && page - pages[index - 1] > 1) items.push('gap')
+    items.push(page)
+  })
+  return items
+}
 
 export function RecordsPane({
   page,
@@ -539,13 +569,13 @@ export function RecordsPane({
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-[0.71875rem] text-ice-600">
-            {appliedQuery ? (
+          {/* The footer already states "1–10 / 共 80 条", so the toolbar only adds
+              a line when a search filter changes what "total" means. */}
+          {appliedQuery && (
+            <div className="flex items-center gap-2 text-[0.71875rem] text-ice-600">
               <NumText text={t('找到 {n} 条匹配记录', { n: total })} />
-            ) : (
-              <NumText text={t('共 {n} 条 · 每页 {size} 条', { n: total, size: limit })} />
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="flex-1" />
 
@@ -701,7 +731,11 @@ export function RecordsPane({
             <span className={cn('tabular-nums', total > 0 && 'font-mono')}>
               {total === 0
                 ? t('暂无记录')
-                : `${offset + 1}–${Math.min(offset + rows.length, total)} / ${total}`}
+                : t('{from}–{to} / 共 {n} 条', {
+                    from: offset + 1,
+                    to: Math.min(offset + rows.length, total),
+                    n: total,
+                  })}
             </span>
             <span className="hidden h-3 w-px bg-line sm:block" />
             <div className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap sm:flex">
@@ -725,34 +759,50 @@ export function RecordsPane({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            <Tip text={t('上一页')}>
-              <button
-                type="button"
-                aria-label={t('上一页')}
-                disabled={offset === 0 || loading}
-                onClick={() => setOffset(Math.max(0, offset - limit))}
-                className="grid size-7 place-items-center rounded-md border border-line text-ice-500 transition hover:border-line-strong hover:text-ice-200 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                <ChevronLeft className="size-3.5" />
-              </button>
-            </Tip>
-            <span className="min-w-[64px] text-center font-mono text-[0.71875rem] text-ice-500">
-              {currentPage} / {pageCount}
-            </span>
-            <Tip text={t('下一页')}>
-              <button
-                type="button"
-                aria-label={t('下一页')}
-                disabled={offset + limit >= total || loading}
-                onClick={() => setOffset(offset + limit)}
-                className="grid size-7 place-items-center rounded-md border border-line text-ice-500 transition hover:border-line-strong hover:text-ice-200 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                <ChevronRight className="size-3.5" />
-              </button>
-            </Tip>
+          {/* HeroUI's Pagination: the chevron sits outside the label and the
+              current page is a soft neutral disc, not a filled accent button —
+              the accent belongs to actions. */}
+          <div className="msv-pager">
+            <button
+              type="button"
+              disabled={offset === 0 || loading}
+              onClick={() => setOffset(Math.max(0, offset - limit))}
+            >
+              <ChevronLeft className="size-3.5" />
+              {t('上一页')}
+            </button>
 
-            {pageCount > 1 && (
+            {pageItems(pageCount, currentPage).map((item, index) =>
+              item === 'gap' ? (
+                <span key={`gap-${index}`} className="msv-pager__gap" aria-hidden="true">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  data-active={item === currentPage || undefined}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  aria-label={t('第 {n} 页', { n: item })}
+                  disabled={loading}
+                  onClick={() => setOffset((item - 1) * limit)}
+                >
+                  <span className="msv-pager__num">{item}</span>
+                </button>
+              ),
+            )}
+
+            <button
+              type="button"
+              disabled={offset + limit >= total || loading}
+              onClick={() => setOffset(offset + limit)}
+            >
+              {t('下一页')}
+              <ChevronRight className="size-3.5" />
+            </button>
+
+            {/* A jump box is only worth its width once the numbers are windowed. */}
+            {pageCount > PAGE_WINDOW && (
               <div className="ml-1 flex items-center gap-1.5 text-[0.71875rem] text-ice-600">
                 <span className="hidden h-3 w-px bg-line lg:block" />
                 <span className="shrink-0">{t('跳至')}</span>
@@ -772,9 +822,7 @@ export function RecordsPane({
                   }}
                   onBlur={() => jumpToPage(pageInput)}
                 />
-                <span className="shrink-0">
-                  {t('页')} · {t('共 {n} 页', { n: pageCount })}
-                </span>
+                <span className="shrink-0">{t('页')}</span>
               </div>
             )}
           </div>

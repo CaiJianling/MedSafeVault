@@ -143,6 +143,7 @@ export function ModalFrame({
   width,
   className,
   bodyClassName,
+  bodyHeader,
   dismissable = true,
 }: {
   open: boolean
@@ -156,6 +157,8 @@ export function ModalFrame({
   width?: string
   className?: string
   bodyClassName?: string
+  /** Fixed strip between the header and the scrolling body (section nav). */
+  bodyHeader?: ReactNode
   dismissable?: boolean
 }) {
   return (
@@ -184,6 +187,7 @@ export function ModalFrame({
                 <Modal.CloseTrigger className="absolute right-4 top-4 text-ice-500 hover:text-ice-200" />
               )}
             </Modal.Header>
+            {bodyHeader && <div className="shrink-0 pt-4">{bodyHeader}</div>}
             <Modal.Body className={cn('min-h-0 overflow-x-hidden pt-4', bodyClassName)}>
               {children}
             </Modal.Body>

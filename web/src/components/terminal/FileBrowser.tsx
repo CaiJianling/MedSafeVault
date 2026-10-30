@@ -406,7 +406,7 @@ export function FileBrowser({
             type="button"
             onClick={() => void submitEditor()}
             disabled={Boolean(busy) || !editor.value.trim()}
-            className="inline-flex h-7 items-center gap-1 rounded-md bg-[var(--msv-accent)] px-2 text-[0.6875rem] font-medium text-[var(--msv-accent-contrast)] transition hover:brightness-110 disabled:opacity-40"
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-[var(--msv-accent-solid)] px-2 text-[0.6875rem] font-medium text-[var(--msv-accent-solid-fg)] transition hover:brightness-110 disabled:opacity-40"
           >
             {busy ? <Spinner className="size-3" /> : <Check className="size-3" />}
             {t('确定')}
@@ -427,7 +427,7 @@ export function FileBrowser({
           type="button"
           onClick={upload}
           disabled={Boolean(busy)}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--msv-accent)] px-2.5 text-[0.71875rem] font-medium text-[var(--msv-accent-contrast)] transition hover:brightness-110 disabled:opacity-40"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--msv-accent-solid)] px-2.5 text-[0.71875rem] font-medium text-[var(--msv-accent-solid-fg)] transition hover:brightness-110 disabled:opacity-40"
         >
           {busy === 'upload' ? <Spinner className="size-3.5" /> : <Upload className="size-3.5" />}
           {t('上传到远程')}

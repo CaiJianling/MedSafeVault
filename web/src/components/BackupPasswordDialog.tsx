@@ -79,7 +79,7 @@ export function BackupPasswordDialog({
             type="button"
             onClick={submit}
             disabled={busy || !password || !confirm}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--msv-accent)] px-4 text-[0.75rem] font-medium text-[var(--msv-accent-contrast)] transition hover:brightness-110 disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--msv-accent-solid)] px-4 text-[0.75rem] font-medium text-[var(--msv-accent-solid-fg)] transition hover:brightness-110 disabled:opacity-50"
           >
             {busy ? <Spinner className="size-3.5" /> : <Download className="size-3.5" />}
             {t('加密并导出')}

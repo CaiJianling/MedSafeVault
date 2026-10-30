@@ -68,7 +68,7 @@ function Bullets({ items }: { items: ReactNode[] }) {
     <ul className="mt-2 space-y-1.5">
       {items.map((item, index) => (
         <li key={index} className="flex gap-2 text-[0.78125rem] leading-relaxed text-ice-500">
-          <span className="mt-[0.5rem] size-1 shrink-0 rounded-full bg-[var(--msv-accent)]/70" />
+          <span className="mt-[0.5rem] size-1 shrink-0 rounded-full bg-[var(--msv-accent-solid)]/70" />
           <span className="min-w-0">{item}</span>
         </li>
       ))}
@@ -197,7 +197,7 @@ export function HelpDrawer({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--msv-accent)] px-3 text-[0.75rem] font-medium text-[var(--msv-accent-contrast)] transition hover:brightness-110"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--msv-accent-solid)] px-3 text-[0.75rem] font-medium text-[var(--msv-accent-solid-fg)] transition hover:brightness-110"
             >
               <X className="size-3.5" />
               {t('关闭')}
@@ -294,17 +294,17 @@ export function HelpDrawer({
             rows={[
               [
                 t('%APPDATA%\\MedSafeVault'),
-                <Code key="p">%APPDATA%\\MedSafeVault</Code>,
+                <Code key="p">%APPDATA%\MedSafeVault</Code>,
                 t('默认。普通用户可写，不需要管理员权限。'),
               ],
               [
                 t('应用程序所在目录'),
-                <Code key="p">&lt;{t('程序目录')}&gt;\\MedSafeVaultData</Code>,
+                <Code key="p">&lt;{t('程序目录')}&gt;\MedSafeVaultData</Code>,
                 t('数据跟着程序走，适合拷到移动硬盘或从共享盘运行。'),
               ],
               [
                 t('自定义目录'),
-                <Code key="p">D:\\…</Code>,
+                <Code key="p">D:\…</Code>,
                 t('放到加密盘或信息科指定的存储位置。'),
               ],
             ]}
@@ -433,7 +433,7 @@ export function HelpDrawer({
           <Bullets
             items={[
               t('页面设置抽屉里可以增删列、改列名与列类型、冻结列、调宽度、拖顺序；列很多时新增会自动滚动到新列。'),
-              t('搜索框跨列模糊匹配；下方可切换每页条数并跳转到指定页码。'),
+              t('搜索框跨列模糊匹配；底栏可直接点页码，页数多时还能「跳至」指定页并切换每页条数。'),
               t('操作系统、厂商等列会联想本机已录入过的值，密码列永不联想、也不会出现在提示里。'),
               t('设置 → 常规 中可切换列表等宽字体、界面字体与代码字体、界面大小（小/标准/大）、强调色与亮暗主题。'),
             ]}

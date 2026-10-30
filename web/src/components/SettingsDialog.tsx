@@ -580,22 +580,26 @@ export function SettingsDialog({
         title={t('设置')}
         description={t('所有设置即时保存。安全与数据操作只影响这台电脑上的本地密码库。')}
         width="880px"
-        bodyClassName="max-h-[68vh] overflow-y-auto pr-1"
+        /* Fixed height: the 关于 tab is much shorter than 常规, and letting the
+           panel follow its content made every tab switch jump. */
+        className="h-[min(760px,calc(100vh-96px))]"
+        bodyClassName="flex-1 overflow-y-auto pr-1"
+        bodyHeader={
+          <div className="flex items-center justify-between gap-3">
+            <Segmented value={tab} onChange={(value) => setTab(value)} items={tabItems} />
+            <span className="text-[0.6875rem] text-ice-600">
+              {savingKey ? (
+                <span className="inline-flex items-center gap-1.5 text-[var(--msv-accent-text)]">
+                  <Spinner className="size-2.5" />
+                  {t('正在保存…')}
+                </span>
+              ) : (
+                t('MedSafeVault · 本地加密')
+              )}
+            </span>
+          </div>
+        }
       >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <Segmented value={tab} onChange={(value) => setTab(value)} items={tabItems} />
-          <span className="text-[0.6875rem] text-ice-600">
-            {savingKey ? (
-              <span className="inline-flex items-center gap-1.5 text-[var(--msv-accent-text)]">
-                <Spinner className="size-2.5" />
-                {t('正在保存…')}
-              </span>
-            ) : (
-              t('MedSafeVault · 本地加密')
-            )}
-          </span>
-        </div>
-
         {tab === 'general' && (
           <div className="space-y-3 animate-fade-in">
             <Section title={t('外观')}>
@@ -1375,7 +1379,7 @@ export function SettingsDialog({
                     type="button"
                     disabled={!customPath.trim() || locationBusy}
                     onClick={() => requestLocation('custom', customPath.trim())}
-                    className="h-9 rounded-lg bg-[var(--msv-accent)] px-3.5 text-[0.75rem] font-medium text-[var(--msv-accent-contrast)] transition hover:brightness-110 disabled:opacity-50"
+                    className="h-9 rounded-lg bg-[var(--msv-accent-solid)] px-3.5 text-[0.75rem] font-medium text-[var(--msv-accent-solid-fg)] transition hover:brightness-110 disabled:opacity-50"
                   >
                     {t('使用此目录')}
                   </button>

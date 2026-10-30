@@ -290,9 +290,9 @@ export function RecordTable({
           {loading
             ? Array.from({ length: 7 }).map((_, rowIndex) => (
                 <tr key={`skeleton-${rowIndex}`}>
-                  <td className="col-handle sticky left-0 z-[2] bg-[var(--msv-table-sticky)]" />
+                  <td className="col-handle sticky left-0 z-[2] msv-frozen" />
                   <td
-                    className="col-check sticky z-[2] bg-[var(--msv-table-sticky)]"
+                    className="col-check sticky z-[2] msv-frozen"
                     style={{ left: HANDLE_WIDTH }}
                   />
                   {columns.map((column, colIndex) => (
@@ -346,7 +346,7 @@ export function RecordTable({
                     }}
                   >
                     <td
-                      className="col-handle sticky left-0 z-[2] border-r border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]"
+                      className="col-handle sticky left-0 z-[2] border-r border-line msv-frozen"
                       style={{ width: HANDLE_WIDTH }}
                       onClick={(event) => event.stopPropagation()}
                     >
@@ -380,7 +380,7 @@ export function RecordTable({
                       </button>
                     </td>
                     <td
-                      className="col-check sticky z-[2] border-r border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]"
+                      className="col-check sticky z-[2] border-r border-line msv-frozen"
                       style={{ width: CHECK_WIDTH, left: HANDLE_WIDTH }}
                       onClick={(event) => event.stopPropagation()}
                     >
@@ -402,7 +402,7 @@ export function RecordTable({
                             column.type === 'textarea' && 'max-w-[280px]',
                             column.masked && 'w-[180px]',
                             frozen &&
-                              'sticky z-[2] bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]',
+                              'sticky z-[2] msv-frozen',
                             column.key === lastFrozenKey &&
                               'shadow-[6px_0_14px_-12px_rgba(0,0,0,.55)]',
                           )}
@@ -436,7 +436,7 @@ export function RecordTable({
                         </td>
                       )
                     })}
-                    <td className="sticky right-0 w-[128px] min-w-[128px] border-l border-line bg-[var(--msv-table-sticky)] group-hover/row:bg-[var(--msv-table-sticky-hover)]">
+                    <td className="sticky right-0 w-[128px] min-w-[128px] border-l border-line msv-frozen">
                       <div className="row-actions flex items-center justify-end gap-0.5">
                         <ConnectMenu
                           compact

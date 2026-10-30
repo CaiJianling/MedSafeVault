@@ -221,7 +221,7 @@ export function Header({
         >
           <SquareTerminal className="size-4" />
           {sessionCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[var(--msv-accent)] px-1 font-mono text-[0.59375rem] font-semibold leading-none text-[var(--msv-accent-contrast)]">
+            <span className="absolute -right-0.5 -top-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[var(--msv-accent-solid)] px-1 font-mono text-[0.59375rem] font-semibold leading-none text-[var(--msv-accent-solid-fg)]">
               {sessionCount > 99 ? '99+' : sessionCount}
             </span>
           )}
