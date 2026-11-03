@@ -436,7 +436,7 @@ export function RecordTable({
                         </td>
                       )
                     })}
-                    <td className="sticky right-0 w-[128px] min-w-[128px] border-l border-line msv-frozen">
+                    <td className="col-actions sticky right-0 w-[128px] min-w-[128px] border-l border-line msv-frozen">
                       <div className="row-actions flex items-center justify-end gap-0.5">
                         <ConnectMenu
                           compact

@@ -1034,6 +1034,17 @@
     opacity: 1;
   }
 
+  /* A sticky cell is always its own stacking context, so the 编辑 / 删除
+     tooltip (z-index 70) could only ever be ordered *within* the pinned
+     actions cell — which sits below the sticky header (z-index 3, frozen
+     columns 4, handle/checkbox 5). That hid the first row's tooltip behind
+     the header. While the pointer is over the actions cell, and its tooltip
+     is showing, lift the cell above every header layer. */
+  .msv-table tbody td.col-actions:hover,
+  .msv-table tbody td.col-actions:focus-within {
+    z-index: 6;
+  }
+
   /* Pagination bar — HeroUI's `.pagination__link` anatomy: pill buttons, a soft
      neutral disc for the current page (the accent is reserved for real actions),
      the chevron sitting outside the 上一页 / 下一页 label, and a press scale. */
