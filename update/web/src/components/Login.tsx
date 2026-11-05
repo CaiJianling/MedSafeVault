@@ -1,20 +1,18 @@
 import { Button } from '@heroui/react'
-import { KeyRound, Loader2, Moon, ShieldCheck, Sun, User } from 'lucide-react'
+import { KeyRound, Loader2, ShieldCheck, User } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, errorMessage } from '../lib/api'
 import type { Info } from '../lib/api'
-import { applyTheme, currentTheme } from '../lib/theme'
+import { ThemeControl } from './ThemeControl'
 import { Field, Spinner } from './primitives'
 
 /** 登录页：账号口令 + 这个服务当前的最新版，让操作者输口令前先确认连对了机器。 */
 export function Login({
   info,
   onLoggedIn,
-  onToggleTheme,
 }: {
   info: Info | null
   onLoggedIn: (username: string, mustChangePassword: boolean) => void
-  onToggleTheme: () => void
 }) {
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
@@ -47,21 +45,10 @@ export function Login({
     }
   }
 
-  const dark = currentTheme() === 'dark'
-
   return (
     <div className="vault-bg flex min-h-screen items-center justify-center px-4 py-10">
-      <button
-        type="button"
-        onClick={() => {
-          applyTheme(dark ? 'light' : 'dark')
-          onToggleTheme()
-        }}
-        className="absolute right-4 top-4 rounded-lg border border-line bg-[var(--msv-tint)] p-2 text-ice-500 transition hover:text-ice-200"
-        aria-label={dark ? '切换到亮色' : '切换到暗色'}
-      >
-        {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-      </button>
+      {/* 登录前也能选主题：三档控件和顶栏那颗是同一个组件。 */}
+      <ThemeControl className="absolute right-4 top-4" />
 
       <div className="adm-rise panel w-full max-w-[26rem] rounded-2xl">
         <div className="flex items-center gap-3 border-b border-line px-6 py-5">
@@ -132,7 +119,6 @@ export function Login({
             size="md"
             className="w-full"
             isDisabled={busy || !username || !password || retry > 0}
-            onPress={() => void submit()}
           >
             {busy ? <Spinner className="mr-1.5" /> : null}
             登录

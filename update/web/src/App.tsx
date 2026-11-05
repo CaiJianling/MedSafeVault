@@ -1,5 +1,5 @@
 import { Button } from '@heroui/react'
-import { LogOut, Moon, ShieldCheck, Sun } from 'lucide-react'
+import { LogOut, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   api,
@@ -10,7 +10,6 @@ import {
   type Release,
   type Summary,
 } from './lib/api'
-import { applyTheme, currentTheme } from './lib/theme'
 import { toast, ToastHost } from './lib/toast'
 import { AccountCard } from './components/AccountCard'
 import { AddressCard } from './components/AddressCard'
@@ -18,6 +17,7 @@ import { AuditCard } from './components/AuditCard'
 import { Login } from './components/Login'
 import { PublishForm } from './components/PublishForm'
 import { ReleaseTable } from './components/ReleaseTable'
+import { ThemeControl } from './components/ThemeControl'
 import { Chip } from './components/primitives'
 
 export default function App() {
@@ -30,7 +30,6 @@ export default function App() {
   const [booting, setBooting] = useState(true)
   const [fatal, setFatal] = useState('')
   const [signal, setSignal] = useState(0)
-  const [dark, setDark] = useState(currentTheme() === 'dark')
 
   const refresh = useCallback(async () => {
     const [session, releaseList, diskFiles] = await Promise.all([
@@ -71,12 +70,6 @@ export default function App() {
     }
   }, [refresh])
 
-  function toggleTheme() {
-    const next = currentTheme() === 'dark' ? 'light' : 'dark'
-    applyTheme(next)
-    setDark(next === 'dark')
-  }
-
   async function signOut() {
     try {
       await api.logout()
@@ -108,7 +101,6 @@ export default function App() {
       <>
         <Login
           info={info}
-          onToggleTheme={toggleTheme}
           onLoggedIn={(name, mustChange) => {
             setUsername(name)
             void refresh().then(() => {
@@ -149,15 +141,7 @@ export default function App() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="hidden text-[0.75rem] text-ice-500 md:inline">{username}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={dark ? '切换到亮色' : '切换到暗色'}
-            className="size-8 min-w-8 rounded-lg text-ice-500"
-            onPress={toggleTheme}
-          >
-            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          </Button>
+          <ThemeControl />
           <Button
             variant="secondary"
             size="sm"
