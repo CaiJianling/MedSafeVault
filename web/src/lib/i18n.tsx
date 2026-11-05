@@ -131,6 +131,18 @@ const EN: Record<string, string> = {
   '修改历史与撤回': 'Changes and undo',
   '回收站': 'Recycle bin',
   '设置': 'Settings',
+  '标签颜色': 'Tab colour',
+  '页面设置里的「标签颜色」会给页签的图标、计数与下划线换色；记录编辑里的「行外观」可以只给这一行设背景色和文字颜色，方便标出重点系统，只影响列表显示、不改变数据。': 'The tab colour in page settings recolours the tab icon, counter and underline; the row appearance in the record editor sets a background and text colour for that single row, which is handy for marking critical systems and only affects the list, never the data.',
+  '自定义颜色': 'Custom colour',
+  '行外观（可选）': 'Row appearance (optional)',
+  '行背景': 'Row background',
+  '文字颜色': 'Text colour',
+  '行背景颜色': 'Row background colour',
+  '恢复默认': 'Reset',
+  '只影响列表里的这一行；文字颜色不填时跟随主题，深色背景请配浅色文字。': 'Only affects this row in the list; the text colour follows the theme unless set, and a dark background needs light text.',
+  '默认': 'Default',
+  '设置（有新版本）': 'Settings (update available)',
+  '设置 · 有新版本': 'Settings · update available',
   '锁定': 'Lock',
   '主题': 'Theme',
   '跟随系统': 'System',
@@ -696,6 +708,8 @@ const EN: Record<string, string> = {
   '主题配色': 'Accent colour',
   '配色会同时适配亮色与暗色，所有色值都按对比度校准过。':
     'Each palette is tuned for both light and dark, and every value was checked for contrast.',
+  '预设配色会同时适配亮色与暗色；也可以点最后一个圆环自己取色，文字色阶与按钮标签会按对比度自动调整。':
+    'The presets are tuned for light and dark; the last ring opens a colour picker, and both the text ramp and the button labels adjust themselves for contrast.',
   '界面字体': 'Interface font',
   '留空使用系统默认；列表来自本机已安装的字体。':
     'Leave empty for the system default; the list comes from fonts installed on this machine.',
@@ -913,6 +927,8 @@ const EN: Record<string, string> = {
   '搜索框跨列模糊匹配；底栏可直接点页码，页数多时还能「跳至」指定页并切换每页条数。': 'The search box matches across all columns; the footer has page buttons, plus a jump box and a page-size selector once there are many pages.',
   '操作系统、厂商等列会联想本机已录入过的值，密码列永不联想、也不会出现在提示里。': 'Columns such as OS or vendor suggest values already entered on this machine; password columns never suggest and never appear in suggestions.',
   '设置 → 常规 中可切换列表等宽字体、界面字体与代码字体、界面大小（小/标准/大）、强调色与亮暗主题。': 'Settings → General switches the monospace list font, the UI and code fonts, the interface size (small/standard/large), the accent colour and the light/dark theme.',
+  '强调色除了 8 套预设，末尾的圆环可以用取色器自选颜色：正文/图标里的强调色会自动调深或调浅到看得清，实心按钮的标签则按底色亮度在黑与白之间自动反色。':
+    'Besides the eight presets, the last ring opens a colour picker; accent text and icons are nudged lighter or darker until they read, and filled buttons switch their label between black and white by the background luminance.',
   '环境变量': 'Environment variables',
   '环境变量只影响本机当前用户或启动脚本，不写入注册表。临时使用可在命令行里设置后再启动程序：': 'Environment variables affect only the current user or the launching script and never touch the registry. For a one-off run, set it in a command prompt and start the app:',
   '变量': 'Variable',
@@ -1216,6 +1232,17 @@ const EN: Record<string, string> = {
   '版本更新': 'Software updates',
   '更新服务地址': 'Update service address',
   '检查更新': 'Check for updates',
+  '当前版本': 'Current version',
+  '最新': 'Latest',
+  '最新 {version}': 'Latest {version}',
+  '更新内容': "What's new",
+  '更新说明': 'Release notes',
+  '支持 Markdown（标题、列表、粗体、行内代码、代码块、引用、表格），普通换行会照样显示；行数太多时说明区自己滚动，不会把弹窗撑开。': 'Markdown is supported (headings, lists, bold, inline code, code blocks, quotes, tables); plain line breaks are kept. Long notes scroll inside the dialog instead of stretching it.',
+  '未处理的更新': 'Pending update',
+  '有新版但点了「以后再说」时，顶栏的设置按钮和 设置 → 关于 标签右上角会各有一个红点，直到开始更新或服务端不再提供这个版本。关于页还会在版本号后面显示最新版，并提供「更新内容 / 立即更新」。': "When a newer version is skipped with \"Later\", a red dot appears on the Settings button and on the About tab until the update is started or the server stops offering it. The About tab also shows the latest version next to the current one, with \"What's new\" and \"Update now\".",
+  '已是最新版本。': 'You are on the latest version.',
+  '有新版本可用，可以先看更新内容再决定。': "A newer version is available - open \"What's new\" first if you like.",
+  '还没检查过，点右侧按钮试一次。': 'Not checked yet - use the button on the right.',
   '填写院内更新服务地址后，每次打开应用会自动检查一次版本；发现新版本时提示，下载的文件按 sha256 校验，替换与重启由后台助手完成，不需要管理员权限。':
     'Once the intranet update endpoint is filled in, the app checks it once at start-up; a new version is offered, the download is verified by sha256, and a background helper replaces the exe and restarts it — no administrator rights needed.',
   '留空即不检查。地址可以只填到主机与端口（例如 http://10.0.0.5:8000/），也可以直接填到 /api/version；服务端由 update/server.py 提供。':
@@ -1247,7 +1274,7 @@ const EN: Record<string, string> = {
   '无法开始下载': 'Could not start the download',
   '下载失败': 'Download failed',
   '更新已下载完成': 'Update downloaded',
-  '新程序已校验通过，保存在数据目录的 updates 文件夹。点击「立即重启并更新」后程序会退出并把新版本就位；万一窗口没有自动回来，直接双击 MedSafeVault.exe 就是新版本，旧版本留在 MedSafeVault.exe.old。':
+  '新程序已校验通过，保存在数据目录的 updates 文件夹。点击「立即重启并更新」后程序会退出并把新版本就位，约几秒后自动打开新版本；万一窗口没有自动回来，直接双击 MedSafeVault.exe 就是新版本，旧版本留在 MedSafeVault.exe.old。':
     'The new build passed verification and sits in the updates folder of the data directory. “Restart and update” quits the app and puts the new build in place; if the window does not come back on its own, double-click MedSafeVault.exe — it is already the new version, and the previous one stays as MedSafeVault.exe.old.',
   '新程序已校验通过，保存在数据目录的 updates 文件夹。点击「立即重启并更新」后，后台助手会在本程序退出后替换并重新启动，无需管理员权限。':
     'The new build passed verification and sits in the updates folder of the data directory. “Restart and update” hands the swap to a background helper that waits for this process to exit, replaces the exe and starts it again — no administrator rights needed.',
@@ -1348,8 +1375,8 @@ const EN: Record<string, string> = {
   '下载后按 versions.json 里的 sha256 与大小校验，不符直接拒绝安装。':
     'The download is checked against the sha256 and size in versions.json; a mismatch refuses the install.',
   '替换': 'Replacement',
-  '应用先就地把自己的 exe 改名成 MedSafeVault.exe.old、把新包写回原路径，再退出；重启由一个自删除的 update-relaunch.bat 延后几秒完成。万一窗口没自动回来，直接双击 MedSafeVault.exe 已经是新版本。':
-    'The app first renames its own exe to MedSafeVault.exe.old and writes the new build back to the original path, then quits; the restart is left to a self-deleting update-relaunch.bat that waits a few seconds. If the window does not return on its own, double-clicking MedSafeVault.exe already gives you the new version.',
+  '应用先就地把自己的 exe 改名成 MedSafeVault.exe.old、把新包写回原路径，再退出；重启由程序自己的一个副本等几秒后拉起新版本，全程不弹命令行窗口。万一窗口没自动回来，直接双击 MedSafeVault.exe 已经是新版本。':
+    'The app first renames its own exe to MedSafeVault.exe.old and writes the new build back to the original path, then quits; a copy of the app waits a few seconds and starts the new version, without any console window. If the window does not return on its own, double-clicking MedSafeVault.exe already gives you the new version.',
   '未填写地址': 'Address empty',
   '完全不检查、不联网；留空即关闭该功能。': 'No check and no network at all; leaving it blank disables the feature.',
   '开发模式': 'Development mode',

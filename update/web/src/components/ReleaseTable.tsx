@@ -209,7 +209,7 @@ export function ReleaseTable({
                   <h4 className="text-[0.8125rem] text-ice-200">
                     <span className="font-mono">{release.version}</span>
                     <span className="ml-2 text-ice-500">
-                      {editing ? '编辑更新说明' : '更新说明'}
+                      {editing ? '编辑更新说明（Markdown）' : '更新说明（Markdown 原文）'}
                       {release.mandatory ? ' · 必须更新' : ''}
                     </span>
                   </h4>

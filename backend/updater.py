@@ -394,39 +394,77 @@ def apply_update(new_file: Path, target: Path, wait_pid: int = 0,
 def launch_env() -> dict:
     """Environment for a fresh copy of this exe.
 
-    PyInstaller's one-file bootloader marks the child process with `_MEIPASS2`
-    pointing at the parent's temporary extraction folder. A grandchild started
-    from inside the updater would inherit it, believe it is already extracted,
-    and then crash with "base_library.zip not found" the moment its parent
-    finishes and cleans that folder up.
+    PyInstaller 6's one-file bootloader tells its child "you are already
+    extracted" through a set of `_PYI_*` variables — the important ones are
+    `_PYI_PARENT_PROCESS_LEVEL=1` and `_PYI_APPLICATION_HOME_DIR=<...>\\_MEIxxxxx`
+    (the older bootloaders used `_MEIPASS2` for the same purpose). A grandchild
+    started from inside the updater inherits them, skips its own extraction and
+    then loads `python313.dll` out of the *parent's* `_MEIxxxxx` folder, which
+    the parent deletes on exit. What the user sees is a modal
 
-    The debug switches are dropped for the same reason: a WebView2 instance
-    from the previous process can still hold `MSV_DEBUG_PORT`, and the new
-    window then fails to create at all.
+        Failed to load Python DLL '…\\Temp\\_MEIxxxxx\\python313.dll'.
+        LoadLibrary: 找不到指定的模块。
+
+    so every one of those keys has to go. The debug switches are dropped for a
+    similar reason: a WebView2 instance from the previous process can still hold
+    `MSV_DEBUG_PORT`, and the new window then fails to create at all.
     """
     env = dict(os.environ)
-    for key in ("_MEIPASS2", "_MEIPASS", "MSV_DEBUG", "MSV_DEBUG_PORT", "MSV_DEV_URL"):
+    for key in [name for name in env if name.startswith("_PYI_")]:
+        env.pop(key, None)
+    for key in ("_MEIPASS", "_MEIPASS2", "PYINSTALLER_RESET_ENVIRONMENT",
+                "MSV_DEBUG", "MSV_DEBUG_PORT", "MSV_DEV_URL"):
         env.pop(key, None)
     return env
 
 
-def relaunch_script(target: Path, delay: int = 4) -> str:
-    """A batch file that waits, starts the new build and deletes itself.
+def relaunch_after_cli(args: list[str], settle: float = 6.0) -> int:
+    """Helper mode (`--relaunch-after <秒> <目标 exe>`): wait, then start the new build.
 
-    The updater helper is itself a PyInstaller one-file process, and a second
-    copy of the same exe reuses its parent's extraction folder. So the helper
-    must be gone before the new instance starts — otherwise its clean-up pulls
-    the folder out from under the app that is already running from it
-    ("Failed to remove temporary directory: _MEI…"). cmd.exe is not a packaged
-    process, so the delay lives there and the helper exits straight away.
+    This runs as a windowed copy of the app, so nothing flashes on screen.
+    A batch file would work too, but `cmd.exe`/`timeout` are console programs:
+    depending on how they are started they either pop a black window for the
+    whole wait or fail to wait at all, so the delay lives in our own GUI
+    process instead. The helper takes no single-instance mutex and never
+    creates a window (it returns before that code in main()).
     """
-    return "\r\n".join([
-        "@echo off",
-        f"timeout /t {delay} /nobreak >nul",
-        f'start "" "{target}"',
-        'del "%~f0"',
-        "",
-    ])
+    if len(args) < 2:
+        return 2
+    try:
+        delay = max(0.0, float(args[0]))
+    except ValueError:
+        delay = 4.0
+    target = Path(args[1])
+
+    def note(message: str) -> None:
+        # 写到自己继承的 stdout：调用方已经把 stdout 指向 update-relaunch.log，
+        # 这样只有一条句柄，不会和父进程的追加句柄在 Windows 上打架（再 open 一次
+        # 会因为共享冲突被拒绝，之前的实现就是这么把日志写丢的）。
+        try:
+            print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}", flush=True)
+        except OSError:
+            pass
+
+    note(f"waiting {delay:.1f}s before starting {target.name}")
+    time.sleep(delay)
+    flags = 0
+    if os.name == "nt":
+        flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    try:
+        process = subprocess.Popen([str(target)], cwd=str(target.parent),
+                                   creationflags=flags, stdin=subprocess.DEVNULL,
+                                   env=launch_env())
+    except OSError as exc:
+        note(f"cannot start {target.name}: {exc}")
+        return 1
+    deadline = time.time() + settle
+    while time.time() < deadline:
+        if process.poll() is None:
+            note(f"started {target.name} (pid {process.pid})")
+            return 0
+        time.sleep(0.3)
+    note(f"{target.name} exited right away (code {process.poll()})")
+    return 1
 
 
 def relaunch_process(target: Path, on_log: Callable[[str], None] | None = None,
@@ -434,10 +472,12 @@ def relaunch_process(target: Path, on_log: Callable[[str], None] | None = None,
                      delay: int = 4) -> None:
     """Start the replaced exe again.
 
-    Packaged: hand the job to a self-deleting batch file and exit, so this
-    process is long gone — extraction folder included — when the new instance
-    boots. From source (nothing to replace): start it directly and check that
-    it stays up, retrying once if it dies immediately.
+    Packaged: hand the job to a detached copy of this same exe in
+    `--relaunch-after` mode. It waits a few seconds (so this process — and its
+    extraction folder — is long gone), then starts the new build. Nothing is
+    written next to the exe and no console window appears, unlike the batch
+    file this replaced. From source (nothing to replace): start it directly
+    and check that it stays up, retrying once if it dies immediately.
     """
     note = on_log or (lambda _line: None)
     flags = 0
@@ -445,13 +485,12 @@ def relaunch_process(target: Path, on_log: Callable[[str], None] | None = None,
         flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     log_path = capture or (target.parent / "update-relaunch.log")
     if os.name == "nt" and getattr(sys, "frozen", False):
-        script = target.parent / "update-relaunch.bat"
-        script.write_text(relaunch_script(target, delay), encoding="mbcs")
+        args = [sys.executable, "--relaunch-after", str(delay), str(target)]
         with open(log_path, "ab") as out:
-            subprocess.Popen([str(script)], cwd=str(target.parent), creationflags=flags,
+            subprocess.Popen(args, cwd=str(target.parent), creationflags=flags,
                              stdin=subprocess.DEVNULL, stdout=out, stderr=out,
                              env=launch_env())
-        note(f"scheduled a restart in {delay}s via {script.name}")
+        note(f"scheduled a restart in {delay}s via --relaunch-after")
         return
     process = subprocess.Popen([str(target)], cwd=str(target.parent), creationflags=flags,
                                stdin=subprocess.DEVNULL, env=launch_env())

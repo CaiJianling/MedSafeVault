@@ -8,6 +8,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import type { Column, ConnectMode, RecordItem } from '../lib/types'
 import { copyText } from '../lib/api'
@@ -309,11 +310,23 @@ export function RecordTable({
             : rows.map((row) => {
                 const checked = selected.has(row.id)
                 const target = dropAt && dropAt.id === row.id && dragging !== row.id ? dropAt : null
+                const rowTint = row.row_bg || ''
+                const rowInk = row.row_fg || ''
                 return (
                   <tr
                     key={row.id}
                     className="group/row"
                     data-active={checked || undefined}
+                    data-row-bg={rowTint ? 'true' : undefined}
+                    data-row-fg={rowInk ? 'true' : undefined}
+                    style={
+                      rowTint || rowInk
+                        ? ({
+                            '--row-bg': rowTint || undefined,
+                            '--row-fg': rowInk || undefined,
+                          } as CSSProperties)
+                        : undefined
+                    }
                     data-dnd={target ? (target.above ? 'above' : 'below') : undefined}
                     data-source={dragging === row.id || undefined}
                     draggable={canReorder && armed === row.id}

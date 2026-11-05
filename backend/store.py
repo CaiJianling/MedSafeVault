@@ -84,10 +84,11 @@ HISTORY_APPLIED = 0
 HISTORY_UNDONE = 1
 HISTORY_DISCARDED = 2
 # Bumped whenever _init_schema gains a column; stored in meta(schema_version).
-SCHEMA_VERSION = "4"
+SCHEMA_VERSION = "5"
 # Rows the Excel import dialog can show and tick individually.
 IMPORT_PREVIEW_ROWS = 300
 
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 COLUMN_TYPES = ("text", "password", "number", "select", "textarea", "date", "url")
 CONNECT_MODES = ("auto", "ssh", "rdp", "telnet", "ftp", "sftp", "vnc")
 SSH_CLIENTS = ("auto", "builtin", "securecrt", "putty", "xshell", "openssh")
@@ -132,6 +133,16 @@ def now_text() -> str:
 
 def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _clean_color(value: Any) -> str:
+    """Row/tab colours are plain #rrggbb; anything else falls back to empty."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if not COLOR_RE.match(text):
+        raise VaultError("颜色格式不正确，应为 #RRGGBB")
+    return text.lower()
 
 
 def _loads(value: str | None, default: Any) -> Any:
@@ -359,10 +370,27 @@ class VaultService:
                 self.conn.execute(
                     "ALTER TABLE page_columns ADD COLUMN frozen INTEGER NOT NULL DEFAULT 0"
                 )
+            page_names = {
+                row["name"]
+                for row in self.conn.execute("PRAGMA table_info(pages)").fetchall()
+            }
+            if "color" not in page_names:
+                # 标签页颜色（v5）：空字符串表示跟随主题强调色。
+                self.conn.execute(
+                    "ALTER TABLE pages ADD COLUMN color TEXT NOT NULL DEFAULT ''"
+                )
             record_names = {
                 row["name"]
                 for row in self.conn.execute("PRAGMA table_info(records)").fetchall()
             }
+            if "row_bg" not in record_names:
+                # 行外观（v5）：行的背景色与文字色，空字符串表示默认。
+                self.conn.execute(
+                    "ALTER TABLE records ADD COLUMN row_bg TEXT NOT NULL DEFAULT ''"
+                )
+                self.conn.execute(
+                    "ALTER TABLE records ADD COLUMN row_fg TEXT NOT NULL DEFAULT ''"
+                )
             if "sort_order" not in record_names:
                 # Manual row order (v4). Existing rows keep the order they had,
                 # which was the autoincrement id.
@@ -415,6 +443,7 @@ class VaultService:
             "table_font": "mono",
             "ui_scale": "standard",
             "accent": "blue",
+            "accent_color": "",
             "ui_font": "",
             "code_font": "",
             "update_api_url": "",
@@ -436,6 +465,10 @@ class VaultService:
             settings["ui_scale"] = "standard"
         if settings.get("accent") not in ACCENTS:
             settings["accent"] = "blue"
+        try:
+            settings["accent_color"] = _clean_color(settings.get("accent_color") or "")
+        except VaultError:
+            settings["accent_color"] = ""
         for key, allowed in (
             ("ssh_client", SSH_CLIENTS),
             ("telnet_client", TELNET_CLIENTS),
@@ -510,6 +543,8 @@ class VaultService:
                 if patch["accent"] not in ACCENTS:
                     raise VaultError("主题配色无效")
                 settings["accent"] = patch["accent"]
+            if "accent_color" in patch:
+                settings["accent_color"] = _clean_color(patch["accent_color"])
             for font_key in ("ui_font", "code_font"):
                 if font_key in patch:
                     settings[font_key] = _clean_font_name(patch[font_key])
@@ -1105,6 +1140,7 @@ class VaultService:
             "name": row["name"],
             "icon": row["icon"],
             "description": row["description"] or "",
+            "color": (row["color"] if "color" in row.keys() else "") or "",
             "sort_order": row["sort_order"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -1196,6 +1232,7 @@ class VaultService:
         if icon not in ICONS:
             icon = "grid"
         description = str(payload.get("description") or "").strip()[:80]
+        color = _clean_color(payload.get("color"))
         columns = payload.get("columns")
         if columns is None:
             columns = []
@@ -1258,7 +1295,8 @@ class VaultService:
             })
         if not cleaned:
             raise VaultError("页面至少需要一列")
-        return {"name": name, "icon": icon, "description": description, "columns": cleaned}
+        return {"name": name, "icon": icon, "description": description,
+                "color": color, "columns": cleaned}
 
     def create_page(self, payload: dict) -> dict:
         with self._lock:
@@ -1270,9 +1308,9 @@ class VaultService:
             ).fetchone()["m"]
             with self.conn:
                 cur = self.conn.execute(
-                    "INSERT INTO pages(name,icon,description,sort_order,created_at,updated_at)"
-                    " VALUES(?,?,?,?,?,?)",
-                    (data["name"], data["icon"], data["description"],
+                    "INSERT INTO pages(name,icon,description,color,sort_order,created_at,"
+                    "updated_at) VALUES(?,?,?,?,?,?,?)",
+                    (data["name"], data["icon"], data["description"], data["color"],
                      max_order + 1, stamp, stamp),
                 )
                 page_id = int(cur.lastrowid)
@@ -1314,8 +1352,10 @@ class VaultService:
             stamp = now_text()
             with self.conn:
                 self.conn.execute(
-                    "UPDATE pages SET name=?,icon=?,description=?,updated_at=? WHERE id=?",
-                    (data["name"], data["icon"], data["description"], stamp, page_id),
+                    "UPDATE pages SET name=?,icon=?,description=?,color=?,updated_at=?"
+                    " WHERE id=?",
+                    (data["name"], data["icon"], data["description"], data["color"],
+                     stamp, page_id),
                 )
                 for i, col in enumerate(data["columns"]):
                     cid = col.get("id")
@@ -1407,11 +1447,12 @@ class VaultService:
         if not page:
             return
         self.conn.execute(
-            "INSERT OR REPLACE INTO pages(id,name,icon,description,sort_order,created_at,"
-            "updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO pages(id,name,icon,description,color,sort_order,"
+            "created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?)",
             (
                 page["id"], page["name"], page.get("icon") or "grid",
-                page.get("description") or "", int(page.get("sort_order") or 0),
+                page.get("description") or "", page.get("color") or "",
+                int(page.get("sort_order") or 0),
                 page.get("created_at") or now_text(), page.get("updated_at") or now_text(),
                 page.get("deleted_at"),
             ),
@@ -1597,6 +1638,8 @@ class VaultService:
             "id": row["id"],
             "page_id": row["page_id"],
             "data": _loads(row["data"], {}),
+            "row_bg": (row["row_bg"] if "row_bg" in row.keys() else "") or "",
+            "row_fg": (row["row_fg"] if "row_fg" in row.keys() else "") or "",
             "sort_order": row["sort_order"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -1607,10 +1650,11 @@ class VaultService:
         if not snap:
             return
         self.conn.execute(
-            "INSERT OR REPLACE INTO records(id,page_id,data,sort_order,created_at,updated_at,deleted_at)"
-            " VALUES(?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO records(id,page_id,data,row_bg,row_fg,sort_order,"
+            "created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?)",
             (
                 snap["id"], snap["page_id"], _json(snap.get("data") or {}),
+                snap.get("row_bg") or "", snap.get("row_fg") or "",
                 int(snap.get("sort_order") or 0),
                 snap.get("created_at") or now_text(),
                 snap.get("updated_at") or now_text(),
@@ -1649,6 +1693,8 @@ class VaultService:
             "page_id": row["page_id"],
             "title": self._record_title(data, cols),
             "cells": cells,
+            "row_bg": (row["row_bg"] if "row_bg" in row.keys() else "") or "",
+            "row_fg": (row["row_fg"] if "row_fg" in row.keys() else "") or "",
             "sort_order": row["sort_order"] if "sort_order" in row.keys() else 0,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -1725,6 +1771,8 @@ class VaultService:
             data = _loads(row["data"], {})
             values = self._decrypt_data(data, cols)
             values["connect_mode"] = data.get("connect_mode") or "auto"
+            values["row_bg"] = (row["row_bg"] if "row_bg" in row.keys() else "") or ""
+            values["row_fg"] = (row["row_fg"] if "row_fg" in row.keys() else "") or ""
             return {
                 "id": row["id"],
                 "page_id": row["page_id"],
@@ -1796,6 +1844,8 @@ class VaultService:
             mode = str(values.get("connect_mode") or "auto").strip().lower()
             if mode not in CONNECT_MODES:
                 mode = "auto"
+            row_bg = _clean_color(values.get("row_bg"))
+            row_fg = _clean_color(values.get("row_fg"))
             data = self._pack_values(cols, clean)
             # How to reach this row (SSH/RDP/...), independent of the page columns.
             data["connect_mode"] = mode
@@ -1810,10 +1860,14 @@ class VaultService:
                     if old["page_id"] != page_id:
                         raise VaultError("记录不属于当前页面")
                     before = self._record_snapshot(record_id)
-                    if _loads(old["data"], {}) != data:
+                    old_bg = (old["row_bg"] if "row_bg" in old.keys() else "") or ""
+                    old_fg = (old["row_fg"] if "row_fg" in old.keys() else "") or ""
+                    if (_loads(old["data"], {}) != data
+                            or old_bg != row_bg or old_fg != row_fg):
                         self.conn.execute(
-                            "UPDATE records SET data=?,updated_at=? WHERE id=?",
-                            (_json(data), stamp, record_id),
+                            "UPDATE records SET data=?,row_bg=?,row_fg=?,updated_at=?"
+                            " WHERE id=?",
+                            (_json(data), row_bg, row_fg, stamp, record_id),
                         )
                         after = self._record_snapshot(record_id)
                         title = f"修改记录「{self._record_title(data, cols)}」"
@@ -1823,9 +1877,10 @@ class VaultService:
                         after = before
                 else:
                     cur = self.conn.execute(
-                        "INSERT INTO records(page_id,data,sort_order,created_at,updated_at)"
-                        " VALUES(?,?,?,?,?)",
-                        (page_id, _json(data), self._next_sort_order(page_id), stamp, stamp),
+                        "INSERT INTO records(page_id,data,row_bg,row_fg,sort_order,"
+                        "created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                        (page_id, _json(data), row_bg, row_fg,
+                         self._next_sort_order(page_id), stamp, stamp),
                     )
                     record_id = int(cur.lastrowid)
                     after = self._record_snapshot(record_id)
@@ -2987,11 +3042,12 @@ class VaultService:
                     self.conn.execute("INSERT INTO meta(k,v) VALUES(?,?)", (k, str(v)))
                 for p in pages:
                     self.conn.execute(
-                        "INSERT INTO pages(id,name,icon,description,sort_order,created_at,updated_at,deleted_at)"
-                        " VALUES(?,?,?,?,?,?,?,?)",
+                        "INSERT INTO pages(id,name,icon,description,color,sort_order,"
+                        "created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?)",
                         (
                             p.get("id"), p.get("name") or "未命名", p.get("icon") or "grid",
-                            p.get("description") or "", int(p.get("sort_order") or 0),
+                            p.get("description") or "", p.get("color") or "",
+                            int(p.get("sort_order") or 0),
                             p.get("created_at") or now_text(), p.get("updated_at") or now_text(),
                             p.get("deleted_at"),
                         ),
@@ -3013,11 +3069,12 @@ class VaultService:
                     )
                 for r in records:
                     self.conn.execute(
-                        "INSERT INTO records(id,page_id,data,sort_order,created_at,updated_at,deleted_at)"
-                        " VALUES(?,?,?,?,?,?,?)",
+                        "INSERT INTO records(id,page_id,data,row_bg,row_fg,sort_order,"
+                        "created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?)",
                         (
                             r.get("id"), r.get("page_id"),
                             _json(r.get("data") or {}),
+                            r.get("row_bg") or "", r.get("row_fg") or "",
                             int(r.get("sort_order") or r.get("id") or 0),
                             r.get("created_at") or now_text(),
                             r.get("updated_at") or now_text(), r.get("deleted_at"),

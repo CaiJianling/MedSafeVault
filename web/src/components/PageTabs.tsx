@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { useI18n } from '../lib/i18n'
 import type { Page } from '../lib/types'
 import { cn } from '../lib/utils'
@@ -26,11 +27,14 @@ export function PageTabs({
       >
         {pages.map((page) => {
           const active = page.id === activeId
+          const tint = page.color || ''
+          const tintStyle: CSSProperties = tint ? { ['--page-color' as string]: tint } : {}
           return (
             <button
               key={page.id}
               type="button"
               role="tab"
+              style={tintStyle}
               aria-selected={active}
               onClick={() => onSelect(page.id)}
               className={cn(
@@ -46,6 +50,7 @@ export function PageTabs({
                   'size-[15px] transition-colors',
                   active ? 'text-teal-300' : 'text-ice-600 group-hover:text-ice-400',
                 )}
+                style={tint ? { color: tint } : undefined}
               />
               <span className="max-w-[130px] truncate font-medium">{page.name}</span>
               <span
@@ -55,6 +60,11 @@ export function PageTabs({
                     ? 'bg-teal-400/15 text-teal-200'
                     : 'bg-[var(--msv-tint)] text-ice-600 group-hover:text-ice-500',
                 )}
+                style={
+                  active && tint
+                    ? { background: `color-mix(in srgb, ${tint} 18%, transparent)`, color: tint }
+                    : undefined
+                }
               >
                 {page.record_count ?? 0}
               </span>
@@ -64,7 +74,14 @@ export function PageTabs({
                 </Tip>
               ) : null}
               {active && (
-                <span className="absolute inset-x-2 -bottom-[7px] h-[2px] rounded-full bg-[linear-gradient(90deg,transparent,var(--msv-accent),transparent)]" />
+                <span
+                  className="absolute inset-x-2 -bottom-[7px] h-[2px] rounded-full bg-[linear-gradient(90deg,transparent,var(--msv-accent),transparent)]"
+                  style={
+                    tint
+                      ? { background: `linear-gradient(90deg, transparent, ${tint}, transparent)` }
+                      : undefined
+                  }
+                />
               )}
             </button>
           )

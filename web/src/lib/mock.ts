@@ -183,6 +183,8 @@ interface MockRecord {
   id: number
   page_id: number
   data: Record<string, string>
+  row_bg?: string
+  row_fg?: string
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -240,6 +242,7 @@ let settings: Settings = {
   table_font: 'mono',
   ui_scale: 'standard',
   accent: 'blue',
+    accent_color: '',
   ui_font: '',
   code_font: '',
   mask_usernames: false,
@@ -1144,6 +1147,8 @@ function presentRecord(record: MockRecord, page: MockPage) {
     page_id: record.page_id,
     title: titleFor(record, columns),
     cells,
+    row_bg: record.row_bg || '',
+    row_fg: record.row_fg || '',
     created_at: record.created_at,
     updated_at: record.updated_at,
     deleted_at: record.deleted_at,
@@ -1604,7 +1609,11 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
             id: record.id,
             page_id: record.page_id,
             page_name: page.name,
-            values: { ...record.data },
+            values: {
+              ...record.data,
+              row_bg: record.row_bg || '',
+              row_fg: record.row_fg || '',
+            },
             columns: publicColumns(page),
             created_at: record.created_at,
             updated_at: record.updated_at,
@@ -1623,11 +1632,19 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
             throw new Error(`「${column.label}」不能为空`)
           }
         }
+        const rowBg = String(values.row_bg || '')
+        const rowFg = String(values.row_fg || '')
+        const columnValues: Record<string, string> = {}
+        for (const [key, value] of Object.entries(values)) {
+          if (key !== 'row_bg' && key !== 'row_fg') columnValues[key] = value
+        }
         if (recordId) {
           const record = records.find((item) => item.id === recordId)
           if (!record) throw new Error('记录不存在')
           const before = { ...record.data }
-          record.data = { ...record.data, ...values }
+          record.data = { ...record.data, ...columnValues }
+          record.row_bg = rowBg
+          record.row_fg = rowFg
           record.updated_at = ISO(new Date())
           pushHistory(
             'update_record',
@@ -1657,7 +1674,9 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         const record: MockRecord = {
           id: Math.max(0, ...records.map((item) => item.id)) + 1,
           page_id: pageId,
-          data: { ...values },
+          data: { ...columnValues },
+          row_bg: rowBg,
+          row_fg: rowFg,
           created_at: ISO(new Date()),
           updated_at: ISO(new Date()),
           deleted_at: null,

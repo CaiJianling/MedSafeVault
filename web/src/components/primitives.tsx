@@ -34,6 +34,7 @@ export function IconButton({
   tip,
   tipRight,
   tipDown,
+  badge,
 }: {
   label: string
   children: ReactNode
@@ -45,6 +46,8 @@ export function IconButton({
   tip?: string
   tipRight?: boolean
   tipDown?: boolean
+  /** 右上角的红点：有新版但还没更新时挂在「设置」按钮上。 */
+  badge?: boolean
 }) {
   const button = (
     <Button
@@ -55,13 +58,14 @@ export function IconButton({
       isDisabled={disabled}
       onPress={onPress}
       className={cn(
-        'size-8 min-w-8 rounded-lg text-ice-500 transition-colors',
+        'relative size-8 min-w-8 rounded-lg text-ice-500 transition-colors',
         'data-[hovered=true]:bg-[var(--msv-tint-strong)] data-[hovered=true]:text-ice-200',
         'data-[pressed=true]:scale-95',
         className,
       )}
     >
       {children}
+      {badge && <span className="msv-dot" aria-hidden="true" />}
     </Button>
   )
   if (!tip) return button
@@ -293,6 +297,86 @@ export function DrawerFrame({
   )
 }
 
+/** Preset palettes. Rows use soft backgrounds + readable text; tabs use saturated hues. */
+export const ROW_BACKGROUNDS = [
+  '#fee2e2', '#ffedd5', '#fef3c7', '#dcfce7', '#ccfbf1',
+  '#e0f2fe', '#e0e7ff', '#f3e8ff', '#fce7f3', '#e2e8f0',
+]
+export const ROW_TEXT_COLORS = [
+  '#b91c1c', '#c2410c', '#a16207', '#15803d', '#0f766e',
+  '#0369a1', '#4338ca', '#7e22ce', '#be185d', '#334155',
+  '#f8fafc', '#020617',
+]
+export const PAGE_COLORS = [
+  '#2563eb', '#0ea5e9', '#14b8a6', '#22c55e', '#a855f7',
+  '#ec4899', '#f43f5e', '#f59e0b', '#64748b',
+]
+
+/** Swatches + a native colour input + "默认"; empty string means follow the theme. */
+export function ColorPicker({
+  value,
+  palette,
+  onChange,
+  ariaLabel,
+}: {
+  value: string
+  palette: string[]
+  onChange: (next: string) => void
+  ariaLabel: string
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={ariaLabel}>
+      {palette.map((color) => {
+        const active = value.toLowerCase() === color
+        return (
+          <button
+            key={color}
+            type="button"
+            aria-label={color}
+            aria-pressed={active}
+            title={color}
+            onClick={() => onChange(active ? '' : color)}
+            className={cn(
+              'size-5 rounded-full border border-black/15 transition',
+              active
+                ? 'ring-2 ring-[var(--msv-accent)] ring-offset-2 ring-offset-[var(--msv-surface)]'
+                : 'hover:scale-110',
+            )}
+            style={{ background: color }}
+          />
+        )
+      })}
+      <label
+        className={cn(
+          'relative grid size-5 cursor-pointer place-items-center overflow-hidden rounded-full border border-line text-ice-500 transition hover:text-ice-200',
+          // 自定义颜色：用渐变底暗示「任选」
+          'bg-[conic-gradient(from_0deg,#f87171,#fbbf24,#4ade80,#38bdf8,#a78bfa,#f472b6,#f87171)]',
+          value && !palette.some((color) => color === value.toLowerCase()) && 'ring-2 ring-[var(--msv-accent)] ring-offset-2 ring-offset-[var(--msv-surface)]',
+        )}
+        title={ariaLabel}
+      >
+        <input
+          type="color"
+          aria-label={ariaLabel}
+          className="absolute inset-0 cursor-pointer opacity-0"
+          value={value || '#ffffff'}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span className="pointer-events-none size-2 rounded-full bg-white/85 shadow" />
+      </label>
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="h-6 rounded-md px-1.5 text-[0.6875rem] text-ice-500 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-200"
+        >
+          默认
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export function Spinner({ className }: { className?: string }) {
   return (
     <span
@@ -370,7 +454,7 @@ export function Segmented<T extends string>({
 }: {
   value: T
   onChange: (value: T) => void
-  items: { value: T; label: string; count?: number }[]
+  items: { value: T; label: string; count?: number; badge?: boolean }[]
   className?: string
 }) {
   return (
@@ -383,8 +467,10 @@ export function Segmented<T extends string>({
           aria-selected={value === item.value}
           data-active={value === item.value}
           onClick={() => onChange(item.value)}
+          className="relative"
         >
           {item.label}
+          {item.badge && <span className="msv-dot" aria-hidden="true" />}
           {item.count != null && (
             <span className="ml-1 text-[0.6875rem] opacity-90">{item.count}</span>
           )}

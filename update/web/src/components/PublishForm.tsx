@@ -271,12 +271,14 @@ export function PublishForm({
         </Field>
       </div>
 
-      <Field label="更新说明" hint="会显示在桌面端的更新弹窗里，写清楚这次改了什么。" className="mt-3">
+      <Field label="更新说明" hint="会显示在桌面端的更新弹窗里。支持 Markdown：标题、列表、粗体、行内代码、代码块、引用、表格，普通换行也会保留。" className="mt-3">
         <textarea
           className="msv-input"
           rows={3}
           maxLength={2000}
-          placeholder="例如：新增两步验证；修复列表首行提示被表头遮挡。"
+          placeholder={
+            '## 本次更新\n- 新增两步验证\n- 修复列表首行提示被表头遮挡\n\n**注意**：升级后需要重新登录一次。'
+          }
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
         />

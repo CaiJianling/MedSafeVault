@@ -30,6 +30,8 @@ export interface Page {
   name: string
   icon: string
   description: string
+  /** 标签页颜色（#rrggbb），空表示跟随主题强调色。 */
+  color?: string
   sort_order: number
   created_at: string
   updated_at: string
@@ -78,6 +80,8 @@ export interface Settings {
   table_font: TableFont
   ui_scale: UiScale
   accent: Accent
+  /** 自定义强调色（#rrggbb），非空时覆盖上面的预设配色。 */
+  accent_color?: string
   ui_font: string
   code_font: string
   mask_usernames: boolean
@@ -264,6 +268,9 @@ export interface RecordItem {
   page_id: number
   title: string
   cells: Record<string, RecordCell>
+  /** 这一行的背景/文字颜色（#rrggbb），空表示默认。 */
+  row_bg?: string
+  row_fg?: string
   /** Manual row order slot; the list is sorted by it when no column sort is on. */
   sort_order?: number
   created_at: string
@@ -275,6 +282,7 @@ export interface RecordDetail {
   id: number
   page_id: number
   page_name: string
+  /** values 里除列值外还有 connect_mode、row_bg、row_fg。 */
   values: Record<string, string>
   columns: Column[]
   created_at: string

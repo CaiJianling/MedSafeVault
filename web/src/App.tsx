@@ -2,10 +2,18 @@ import { useTheme } from '@heroui/react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError, api, setLockedListener } from './lib/api'
+import { applyCustomAccent } from './lib/colors'
 import { ConfirmProvider } from './lib/confirm'
 import { translateServerText, useI18n } from './lib/i18n'
 import { toast, Toaster } from './lib/toast'
-import type { ConnectResult, Page, PageTemplate, StateInfo, UndoState } from './lib/types'
+import type {
+  ConnectResult,
+  Page,
+  PageTemplate,
+  StateInfo,
+  UndoState,
+  UpdateInfo,
+} from './lib/types'
 import { isEditableTarget, throttle } from './lib/utils'
 import { BrandMark } from './components/Brand'
 import { CloseDialog } from './components/CloseDialog'
@@ -108,6 +116,13 @@ export default function App() {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [closePromptOpen, setClosePromptOpen] = useState(false)
   const [updateOpen, setUpdateOpen] = useState(false)
+  // 有新版但用户点了「以后再说」：顶栏设置按钮与设置里的「关于」各带一个红点
+  const [updateBadge, setUpdateBadge] = useState(false)
+  // 最近一次检查的结果：关于页要在版本号后面显示最新版，并提供「更新内容 / 立即更新」
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [updateBusy, setUpdateBusy] = useState(false)
+  // 从「立即更新」进来的话，弹窗检查完直接开始下载
+  const [updateAutoDownload, setUpdateAutoDownload] = useState(false)
 
   const themeMode = (theme === 'light' || theme === 'dark' ? theme : 'system') as ThemeMode
 
@@ -142,6 +157,9 @@ export default function App() {
     root.setAttribute('data-ui-scale', state?.settings.ui_scale ?? 'standard')
     root.setAttribute('data-table-font', state?.settings.table_font ?? 'mono')
     root.setAttribute('data-accent', state?.settings.accent ?? 'blue')
+    // 自定义强调色：写一组行内变量（取色器选的色 + 自动校过的文字色阶与标签反色），
+    // 传空串则清掉这些变量、回到预设配色。
+    applyCustomAccent(root, state?.settings.accent_color ?? '')
 
     const sans = state?.settings.ui_font
     const mono = state?.settings.code_font
@@ -161,6 +179,7 @@ export default function App() {
     state?.settings.ui_scale,
     state?.settings.table_font,
     state?.settings.accent,
+    state?.settings.accent_color,
     state?.settings.ui_font,
     state?.settings.code_font,
   ])
@@ -328,27 +347,42 @@ export default function App() {
     return () => setLockedListener(null)
   }, [handleSessionLocked])
 
-  // One silent version check per launch, and only when an endpoint is set.
-  // The dialog itself is opened from settings → 关于 as well.
-  const updateChecked = useRef(false)
-  useEffect(() => {
-    const url = state?.settings.update_api_url || ''
-    if (!url || updateChecked.current) return
-    updateChecked.current = true
-    api
-      .checkUpdate()
-      .then((result) => {
-        if (result.update.info.available) setUpdateOpen(true)
-      })
-      .catch((error) => {
+  /** 检查一次版本；openWhenAvailable 为真时，有新版就弹窗（启动时与「检查更新」都走它）。 */
+  const runUpdateCheck = useCallback(
+    async (openWhenAvailable: boolean) => {
+      setUpdateBusy(true)
+      try {
+        const result = await api.checkUpdate()
+        setUpdateInfo(result.update.info)
+        if (result.update.info.available) {
+          if (openWhenAvailable) setUpdateOpen(true)
+        } else {
+          setUpdateBadge(false)
+        }
+        return result.update.info
+      } catch (error) {
         // An unreachable file server must not interrupt daily work, but the
         // operator should still hear about it once per launch.
         toast.info(
           t('无法检查更新'),
           error instanceof ApiError ? error.message : t('请稍后在设置 → 关于里手动检查'),
         )
-      })
-  }, [state, t])
+        return null
+      } finally {
+        setUpdateBusy(false)
+      }
+    },
+    [t],
+  )
+
+  // One silent version check per launch, and only when an endpoint is set.
+  const updateChecked = useRef(false)
+  useEffect(() => {
+    const url = state?.settings.update_api_url || ''
+    if (!url || updateChecked.current) return
+    updateChecked.current = true
+    void runUpdateCheck(true)
+  }, [state, runUpdateCheck])
 
   useEffect(() => {
     window.__msvNativeMessage = (title, message) => toast.info(title, message)
@@ -547,6 +581,7 @@ export default function App() {
           onSettings={() => setSettingsOpen(true)}
           onHelp={() => setHelpOpen(true)}
           onLock={lockNow}
+          settingsBadge={updateBadge}
           sessionCount={tabs.length}
           terminalOpen={terminalOpen}
           onTerminal={() => setTerminalOpen((value) => !value)}
@@ -621,6 +656,18 @@ export default function App() {
           onTheme={applyTheme}
           locale={locale}
           onLocale={setLocale}
+          updateBadge={updateBadge}
+          updateInfo={updateInfo}
+          updateBusy={updateBusy}
+          onCheckUpdate={() => void runUpdateCheck(true)}
+          onViewNotes={() => {
+            setUpdateAutoDownload(false)
+            setUpdateOpen(true)
+          }}
+          onQuickUpdate={() => {
+            setUpdateAutoDownload(true)
+            setUpdateOpen(true)
+          }}
           onSettings={(settings) => {
             setState((previous) =>
               previous
@@ -638,7 +685,6 @@ export default function App() {
             void loadWorkspace()
           }}
           onStateChange={(next) => setState(next)}
-          onCheckUpdate={() => setUpdateOpen(true)}
         />
 
         <TerminalOverlay
@@ -682,7 +728,12 @@ export default function App() {
       />
       <UpdateDialog
         open={updateOpen}
-        onOpenChange={setUpdateOpen}
+        onOpenChange={(next) => {
+          setUpdateOpen(next)
+          if (!next) setUpdateAutoDownload(false)
+        }}
+        autoDownload={updateAutoDownload}
+        onBadge={setUpdateBadge}
         url={state?.settings.update_api_url ?? ''}
         version={state?.version ?? ''}
       />

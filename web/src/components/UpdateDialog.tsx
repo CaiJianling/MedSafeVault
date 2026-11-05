@@ -7,13 +7,19 @@
  * also the place that refuses a download whose sha256 does not match.
  */
 import { AlertTriangle, Download, RefreshCw, Rocket, XCircle } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
 import type { UpdateInfo, UpdateSnapshot } from '../lib/types'
 import { cn, formatBytes } from '../lib/utils'
 import { ModalFrame, Spinner } from './primitives'
+
+// Markdown 解析器（react-markdown + gfm）有 1 MB 多，只有真的要看更新说明时才需要，
+// 拆成单独的 chunk 按需加载：主界面的启动体积不受影响。
+const Markdown = lazy(() =>
+  import('./Markdown').then((module) => ({ default: module.Markdown })),
+)
 
 function message(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback
@@ -26,11 +32,17 @@ export function UpdateDialog({
   onOpenChange,
   url,
   version,
+  autoDownload,
+  onBadge,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   url: string
   version: string
+  /** 从「关于 → 立即更新」进来时，检查完直接开始下载。 */
+  autoDownload?: boolean
+  /** 有新版但用户选择「以后再说」时，让顶栏的设置按钮和设置里的「关于」带上红点。 */
+  onBadge?: (show: boolean) => void
 }) {
   const { t } = useI18n()
   const [phase, setPhase] = useState<Phase>('checking')
@@ -40,6 +52,8 @@ export function UpdateDialog({
   const [busy, setBusy] = useState(false)
   const [nonce, setNonce] = useState(0)
   const pollRef = useRef<number | null>(null)
+  // 只在打开时读一次：自动下载是「这次打开」的行为，取消后不再偷偷重来
+  const autoRef = useRef(false)
 
   const stopPolling = useCallback(() => {
     if (pollRef.current !== null) {
@@ -79,6 +93,7 @@ export function UpdateDialog({
     setError('')
     setSnapshot(null)
     setPhase('checking')
+    autoRef.current = Boolean(autoDownload)
     if (!url) {
       setPhase('error')
       setError(t('尚未填写更新服务地址，请在设置 → 关于里填写后再检查。'))
@@ -93,8 +108,13 @@ export function UpdateDialog({
         setInfo(result.update.info)
         if (result.update.info.available) {
           setPhase('available')
+          if (autoRef.current) {
+            autoRef.current = false
+            void startDownload(result.update.info)
+          }
         } else {
           setPhase('error')
+          onBadge?.(false)
           setError(
             t('当前已是最新版本（{v}）。更新服务上的最新版是 {latest}。', {
               v: version,
@@ -114,14 +134,15 @@ export function UpdateDialog({
     }
   }, [open, url, version, nonce, stopPolling, t])
 
-  async function startDownload() {
-    if (!info) return
+  async function startDownload(release?: UpdateInfo | null) {
+    if (!(release ?? info)) return
     setBusy(true)
     setError('')
     try {
       const result = await api.downloadUpdate()
       setSnapshot(result.update)
       setPhase('download')
+      onBadge?.(false)  // 已经开始处理这次更新，红点收起
       poll()
     } catch (error) {
       setPhase('error')
@@ -147,6 +168,7 @@ export function UpdateDialog({
     setError('')
     try {
       await api.installUpdate()
+      onBadge?.(false)
       toast.info(t('正在更新'), t('程序会短暂关闭后自动重新启动。'))
     } catch (error) {
       setPhase('error')
@@ -154,6 +176,17 @@ export function UpdateDialog({
       setBusy(false)
     }
   }
+
+  /** 关掉弹窗；如果还有没处理的更新（已下载但没重启也算），留一个红点。 */
+  const close = useCallback(
+    (next: boolean) => {
+      if (!next) {
+        onBadge?.(phase === 'available' || phase === 'download' || phase === 'ready')
+      }
+      onOpenChange(next)
+    },
+    [onBadge, onOpenChange, phase],
+  )
 
   const percent = snapshot?.progress?.percent ?? 0
   const received = snapshot?.progress?.received ?? 0
@@ -163,7 +196,7 @@ export function UpdateDialog({
   return (
     <ModalFrame
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={close}
       size="sm"
       icon={
         phase === 'error' ? (
@@ -200,7 +233,7 @@ export function UpdateDialog({
             <>
               <button
                 type="button"
-                onClick={() => onOpenChange(false)}
+                onClick={() => close(false)}
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.78125rem] text-ice-500 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-200"
               >
                 {t('以后再说')}
@@ -208,7 +241,7 @@ export function UpdateDialog({
               <button
                 type="button"
                 disabled={busy}
-                onClick={startDownload}
+                onClick={() => void startDownload()}
                 className="btn-primary inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-[0.78125rem] font-semibold transition hover:brightness-105 disabled:opacity-50"
               >
                 {busy ? <Spinner className="size-3.5" /> : <Download className="size-3.5" />}
@@ -240,7 +273,7 @@ export function UpdateDialog({
             <>
               <button
                 type="button"
-                onClick={() => onOpenChange(false)}
+                onClick={() => close(false)}
                 className="inline-flex h-9 items-center rounded-lg px-3 text-[0.78125rem] text-ice-500 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-200"
               >
                 {t('关闭')}
@@ -271,8 +304,16 @@ export function UpdateDialog({
         {(phase === 'available' || phase === 'download' || phase === 'ready') && info && (
           <>
             {info.notes && (
-              <div className="max-h-[220px] overflow-y-auto rounded-lg border border-line bg-[var(--msv-tint)] px-3 py-2.5 text-[0.75rem] leading-relaxed text-ice-300">
-                {info.notes}
+              <div className="max-h-[220px] overflow-y-auto rounded-lg border border-line bg-[var(--msv-tint)] px-3 py-2.5">
+                <Suspense
+                  fallback={
+                    <p className="whitespace-pre-line text-[0.75rem] leading-relaxed text-ice-500">
+                      {info.notes}
+                    </p>
+                  }
+                >
+                  <Markdown text={info.notes} />
+                </Suspense>
               </div>
             )}
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[0.71875rem]">
@@ -330,7 +371,7 @@ export function UpdateDialog({
         {phase === 'ready' && (
           <p className="flex items-start gap-2 rounded-lg border border-teal-400/25 bg-teal-400/[0.07] px-3 py-2 text-[0.71875rem] leading-relaxed text-teal-100">
             <Rocket className="mt-0.5 size-3.5 shrink-0" />
-            {t('新程序已校验通过，保存在数据目录的 updates 文件夹。点击「立即重启并更新」后程序会退出并把新版本就位；万一窗口没有自动回来，直接双击 MedSafeVault.exe 就是新版本，旧版本留在 MedSafeVault.exe.old。')}
+            {t('新程序已校验通过，保存在数据目录的 updates 文件夹。点击「立即重启并更新」后程序会退出并把新版本就位，约几秒后自动打开新版本；万一窗口没有自动回来，直接双击 MedSafeVault.exe 就是新版本，旧版本留在 MedSafeVault.exe.old。')}
           </p>
         )}
 

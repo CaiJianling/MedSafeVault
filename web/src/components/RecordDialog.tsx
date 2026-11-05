@@ -15,7 +15,15 @@ import { useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
 import type { Column, ConnectMode, Page, RecordDetail } from '../lib/types'
 import { cn, formatDateTime, isMonospaceColumn, passwordStrength } from '../lib/utils'
-import { Field, ModalFrame, SelectMenu, Spinner } from './primitives'
+import {
+  ColorPicker,
+  Field,
+  ModalFrame,
+  ROW_BACKGROUNDS,
+  ROW_TEXT_COLORS,
+  SelectMenu,
+  Spinner,
+} from './primitives'
 import { SuggestInput } from './SuggestInput'
 
 type Values = Record<string, string>
@@ -26,6 +34,8 @@ function initialValues(columns: Column[]): Values {
     values[column.key] = ''
   }
   values.connect_mode = 'auto'
+  values.row_bg = ''
+  values.row_fg = ''
   return values
 }
 
@@ -84,6 +94,8 @@ export function RecordDialog({
           next[column.key] = result.record.values[column.key] ?? ''
         }
         next.connect_mode = result.record.values.connect_mode || 'auto'
+        next.row_bg = result.record.values.row_bg || ''
+        next.row_fg = result.record.values.row_fg || ''
         setValues(next)
       })
       .catch((err) => {
@@ -186,6 +198,8 @@ export function RecordDialog({
         payload[column.key] = String(values[column.key] ?? '')
       }
       payload.connect_mode = String(values.connect_mode || 'auto')
+      payload.row_bg = String(values.row_bg || '')
+      payload.row_fg = String(values.row_fg || '')
       await api.saveRecord(page.id, payload, recordId)
       toast.success(
         recordId ? t('记录已更新') : t('记录已添加'),
@@ -440,6 +454,45 @@ export function RecordDialog({
                 </Field>
               )
             })}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-line bg-[var(--msv-tint)] px-3 py-2.5">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[0.71875rem] font-medium text-ice-500">{t('行外观（可选）')}</span>
+              {values.row_bg || values.row_fg ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    update('row_bg', '')
+                    update('row_fg', '')
+                  }}
+                  className="h-6 rounded-md px-1.5 text-[0.6875rem] text-ice-500 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-200"
+                >
+                  {t('恢复默认')}
+                </button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-14 shrink-0 text-[0.6875rem] text-ice-600">{t('行背景')}</span>
+              <ColorPicker
+                value={String(values.row_bg || '')}
+                palette={ROW_BACKGROUNDS}
+                onChange={(next) => update('row_bg', next)}
+                ariaLabel={t('行背景颜色')}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="w-14 shrink-0 text-[0.6875rem] text-ice-600">{t('文字颜色')}</span>
+              <ColorPicker
+                value={String(values.row_fg || '')}
+                palette={ROW_TEXT_COLORS}
+                onChange={(next) => update('row_fg', next)}
+                ariaLabel={t('文字颜色')}
+              />
+            </div>
+            <p className="mt-1.5 text-[0.65625rem] leading-relaxed text-ice-600">
+              {t('只影响列表里的这一行；文字颜色不填时跟随主题，深色背景请配浅色文字。')}
+            </p>
           </div>
 
           <div className="mt-5 flex items-start gap-2 rounded-lg border border-teal-400/15 bg-teal-400/[0.035] px-3 py-2.5 text-[0.71875rem] leading-relaxed text-ice-500">

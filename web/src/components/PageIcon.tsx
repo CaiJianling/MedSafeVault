@@ -19,6 +19,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { cn } from '../lib/utils'
 
 export const PAGE_ICONS: { id: string; label: string; icon: LucideIcon }[] = [
@@ -50,11 +51,13 @@ export function PageIcon({
   name,
   className,
   strokeWidth = 1.8,
+  style,
 }: {
   name?: string
   className?: string
   strokeWidth?: number
+  style?: CSSProperties
 }) {
   const Icon = iconFor(name)
-  return <Icon className={cn('size-4', className)} strokeWidth={strokeWidth} />
+  return <Icon className={cn('size-4', className)} strokeWidth={strokeWidth} style={style} />
 }

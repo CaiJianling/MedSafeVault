@@ -172,6 +172,11 @@ def main() -> int:
         # touch logging, the mutex or the GUI, so this branch stays first.
         index = sys.argv.index("--apply-update")
         return updater.apply_cli(sys.argv[index + 1:])
+    if "--relaunch-after" in sys.argv:
+        # Second half of the update: a windowed copy of the app waits a few
+        # seconds, starts the new build and exits. No console, no mutex, no UI.
+        index = sys.argv.index("--relaunch-after")
+        return updater.relaunch_after_cli(sys.argv[index + 1:])
     setup_logging()
     log.info("Starting MedSafeVault %s (frozen=%s)", __version__, getattr(sys, "frozen", False))
     log.info("Config file: %s", paths.config_path())

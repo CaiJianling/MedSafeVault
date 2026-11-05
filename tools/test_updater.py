@@ -424,18 +424,31 @@ def test_frozen_paths(tmp: Path | None = None) -> None:
     finally:
         updater.subprocess.Popen = real  # type: ignore
     os.environ["_MEIPASS2"] = "C:\\Users\\x\\AppData\\Local\\Temp\\_MEI000000fake"
+    # PyInstaller 6 还会给子进程留下这几组变量；孙进程继承后会以为已经解包，
+    # 去父进程已经删掉的 _MEIxxxxx 里加载 python313.dll，弹「Failed to load Python DLL」。
+    os.environ["_MEIPASS"] = os.environ["_MEIPASS2"]
+    os.environ["_PYI_APPLICATION_HOME_DIR"] = os.environ["_MEIPASS2"]
+    os.environ["_PYI_PARENT_PROCESS_LEVEL"] = "1"
+    os.environ["_PYI_ARCHIVE_FILE"] = "C:\\Users\\x\\MedSafeVault.exe"
+    os.environ["_PYI_SPLASH_IPC"] = "0"
+    os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     os.environ["MSV_PROBE_KEEP"] = "kept"
     os.environ["MSV_DEBUG"] = "1"
     os.environ["MSV_DEBUG_PORT"] = "9248"
     try:
         env = updater.launch_env()
-        check("_MEIPASS2" not in env and "_MEIPASS" not in env,
-              "the bootloader marker is not passed to a fresh copy of the exe")
+        leaked = sorted(key for key in env if key.startswith(("_PYI", "_MEI")))
+        check(not leaked, f"no bootloader marker reaches the fresh copy of the exe ({leaked})")
+        check("PYINSTALLER_RESET_ENVIRONMENT" not in env,
+              "the outer launcher's reset switch is dropped too")
         check("MSV_DEBUG" not in env and "MSV_DEBUG_PORT" not in env,
               "the debug port is not inherited by the relaunched instance")
         check(env.get("MSV_PROBE_KEEP") == "kept", "ordinary variables survive")
     finally:
-        for key in ("_MEIPASS2", "MSV_PROBE_KEEP", "MSV_DEBUG", "MSV_DEBUG_PORT"):
+        for key in ("_MEIPASS2", "_MEIPASS", "_PYI_APPLICATION_HOME_DIR",
+                    "_PYI_PARENT_PROCESS_LEVEL", "_PYI_ARCHIVE_FILE", "_PYI_SPLASH_IPC",
+                    "PYINSTALLER_RESET_ENVIRONMENT", "MSV_PROBE_KEEP", "MSV_DEBUG",
+                    "MSV_DEBUG_PORT"):
             os.environ.pop(key, None)
     check(updater.target_exe() is None, "running from source refuses to self-replace")
     # when frozen, the new instance must not be a child of the updater process
@@ -463,14 +476,44 @@ def test_frozen_paths(tmp: Path | None = None) -> None:
     finally:
         updater.subprocess.Popen = real_popen  # type: ignore
         del updater.sys.frozen
-    check(started and started[0][0].endswith("update-relaunch.bat"),
-          f"packaged relaunch goes through a batch file: {started}")
-    text = (fake_target.parent / "update-relaunch.bat").read_text(encoding="mbcs")
-    check("timeout /t 4 /nobreak >nul" in text, "the batch waits for this process to die")
-    check(f'start "" "{fake_target}"' in text, "the batch starts the replaced exe")
-    check('del "%~f0"' in text, "the batch deletes itself")
-    check(updater.relaunch_script(fake_target, delay=0).count("timeout") == 1,
-          "the script is one short batch")
+    check(started and started[0][1:4] == ["--relaunch-after", "4", str(fake_target)],
+          f"packaged relaunch hands the delay to a windowed helper copy: {started}")
+    check(not (fake_target.parent / "update-relaunch.bat").exists(),
+          "no batch file is written next to the exe (no console window)")
+    # 助手模式：睡够时间、拉起新 exe、盯着它别立刻退出
+    slept: list[float] = []
+    real_sleep = updater.time.sleep
+    real_popen_second = updater.subprocess.Popen
+    second: list[list] = []
+
+    class Alive:
+        pid = 4321
+
+        def poll(self):
+            return None
+
+    def fake_popen(args, **kwargs):
+        second.append(list(args))
+        return Alive()
+
+    updater.time.sleep = lambda value: slept.append(value)
+    updater.subprocess.Popen = fake_popen  # type: ignore
+    import io
+    captured = io.StringIO()
+    real_stdout = sys.stdout
+    sys.stdout = captured
+    try:
+        code = updater.relaunch_after_cli(["3", str(fake_target)])
+    finally:
+        sys.stdout = real_stdout
+        updater.time.sleep = real_sleep
+        updater.subprocess.Popen = real_popen_second  # type: ignore
+    check(code == 0 and slept and slept[0] == 3.0, f"helper waits then exits 0 ({slept})")
+    check(second and second[0] == [str(fake_target)], f"helper starts the new build: {second}")
+    out = captured.getvalue()
+    check("waiting 3.0s" in out and "started MedSafeVault.exe" in out,
+          "helper writes its steps to the inherited log handle")
+    check(updater.relaunch_after_cli(["1"]) == 2, "helper without a target refuses to run")
     expect_error(lambda: updater.UpdateJob().start_download({"version": "1"}),
                  "开发模式", "dev mode cannot install")
 
@@ -541,7 +584,7 @@ def test_wait_for_exit(tmp: Path) -> None:
     check(launched and launched[0][0] == str(target), f"relaunched: {launched}")
     check(alive_calls["n"] >= 2, "it checked the old pid before relaunching")
     check((folder / "update-relaunch.log").exists() is False,
-          "the development path does not create the batch log")
+          "the development path does not create the relaunch log")
 
     # a child that dies at once is reported instead of hanging
     class Dead:

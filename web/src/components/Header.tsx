@@ -105,6 +105,7 @@ export function Header({
   onHistory,
   onRecycle,
   onSettings,
+  settingsBadge,
   onHelp,
   onLock,
   onTerminal,
@@ -123,6 +124,7 @@ export function Header({
   onHistory: () => void
   onRecycle: () => void
   onSettings: () => void
+  settingsBadge?: boolean
   onHelp: () => void
   onLock: () => void
   onTerminal: () => void
@@ -227,7 +229,13 @@ export function Header({
           )}
         </button>
       </Tip>
-      <IconButton label={t('设置')} tip={t('设置')} tipDown onPress={onSettings}>
+      <IconButton
+        label={settingsBadge ? t('设置（有新版本）') : t('设置')}
+        tip={settingsBadge ? t('设置 · 有新版本') : t('设置')}
+        tipDown
+        onPress={onSettings}
+        badge={settingsBadge}
+      >
         <Settings2 className="size-4" />
       </IconButton>
       <IconButton label={t('帮助说明')} tip={t('帮助说明')} tipDown onPress={onHelp}>

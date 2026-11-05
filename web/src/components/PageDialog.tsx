@@ -21,7 +21,14 @@ import { toast } from '../lib/toast'
 import type { Column, ColumnType, Page, PageTemplate } from '../lib/types'
 import { cn } from '../lib/utils'
 import { PAGE_ICONS, PageIcon } from './PageIcon'
-import { DrawerFrame, SelectMenu, Spinner, Switch } from './primitives'
+import {
+  ColorPicker,
+  DrawerFrame,
+  PAGE_COLORS,
+  SelectMenu,
+  Spinner,
+  Switch,
+} from './primitives'
 
 interface EditableColumn {
   uid: string
@@ -105,6 +112,7 @@ export function PageDialog({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [icon, setIcon] = useState('grid')
+  const [color, setColor] = useState('')
   const [templateId, setTemplateId] = useState('blank')
   const [columns, setColumns] = useState<EditableColumn[]>([blankColumn()])
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -121,6 +129,7 @@ export function PageDialog({
       setName(page.name)
       setDescription(page.description)
       setIcon(page.icon)
+      setColor(page.color || '')
       setColumns(normalizeFrozen(page.columns.map(toEditable)))
       setTemplateId('')
       return
@@ -129,6 +138,7 @@ export function PageDialog({
     setName('')
     setDescription(blank?.description ?? '')
     setIcon(blank?.icon ?? 'grid')
+    setColor('')
     setColumns((blank?.columns ?? [blankColumn()]).map(toEditable))
     setTemplateId('blank')
   }, [open, mode, page, templates])
@@ -157,6 +167,7 @@ export function PageDialog({
       setDescription(template.description)
     }
     setIcon(template.icon)
+    setColor('')
     setColumns(normalizeFrozen(template.columns.map(toEditable)))
     setExpanded(null)
     setError('')
@@ -261,6 +272,7 @@ export function PageDialog({
       const payload = {
         name: trimmed,
         icon,
+        color,
         description: description.trim(),
         columns: columns.map((column) => ({
           id: column.id,
@@ -486,6 +498,15 @@ export function PageDialog({
                   </button>
                 )
               })}
+            </div>
+            <div className="mt-3">
+              <span className="field-label">{t('标签颜色')}</span>
+              <ColorPicker
+                value={color}
+                palette={PAGE_COLORS}
+                onChange={setColor}
+                ariaLabel={t('自定义颜色')}
+              />
             </div>
           </div>
         </div>

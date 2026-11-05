@@ -5,6 +5,7 @@ import {
   Copy,
   Database,
   Download,
+  FileText,
   FileArchive,
   FileKey2,
   FolderOpen,
@@ -37,6 +38,7 @@ import type {
   RecoveryStatus,
   Settings,
   StateInfo,
+  UpdateInfo,
 } from '../lib/types'
 import {
   cn,
@@ -124,6 +126,11 @@ export function SettingsDialog({
   onRestored,
   onStateChange,
   onCheckUpdate,
+  updateBadge,
+  updateInfo,
+  updateBusy,
+  onViewNotes,
+  onQuickUpdate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -136,6 +143,13 @@ export function SettingsDialog({
   onRestored: (state: StateInfo) => void
   onStateChange: (state: StateInfo) => void
   onCheckUpdate: () => void
+  /** 有新版没处理：在「关于」标签右上角点一个红点。 */
+  updateBadge?: boolean
+  /** 最近一次检查的结果：关于页据此显示最新版、更新内容与立即更新。 */
+  updateInfo?: UpdateInfo | null
+  updateBusy?: boolean
+  onViewNotes?: () => void
+  onQuickUpdate?: () => void
 }) {
   const { t } = useI18n()
   const confirm = useConfirm()
@@ -200,11 +214,11 @@ export function SettingsDialog({
   const [about, setAbout] = useState<AboutInfo | null>(null)
   const [aboutLoading, setAboutLoading] = useState(false)
 
-  const tabItems: { value: Tab; label: string }[] = [
+  const tabItems: { value: Tab; label: string; badge?: boolean }[] = [
     { value: 'general', label: t('常规') },
     { value: 'security', label: t('安全') },
     { value: 'data', label: t('数据') },
-    { value: 'about', label: t('关于') },
+    { value: 'about', label: t('关于'), badge: updateBadge },
   ]
 
   useEffect(() => {
@@ -658,11 +672,11 @@ export function SettingsDialog({
               <div className="h-px bg-line/70" />
               <Row
                 title={t('主题配色')}
-                description={t('配色会同时适配亮色与暗色，所有色值都按对比度校准过。')}
+                description={t('预设配色会同时适配亮色与暗色；也可以点最后一个圆环自己取色，文字色阶与按钮标签会按对比度自动调整。')}
               >
                 <div className="flex items-center gap-1.5">
                   {ACCENT_OPTIONS.map((option) => {
-                    const active = settings.accent === option.id
+                    const active = !settings.accent_color && settings.accent === option.id
                     return (
                       <Tip key={option.id} text={t(option.name)}>
                         <button
@@ -670,7 +684,9 @@ export function SettingsDialog({
                           data-accent={option.id}
                           aria-label={t(option.name)}
                           aria-pressed={active}
-                          onClick={() => updateSettings({ accent: option.id }, 'accent')}
+                          onClick={() =>
+                            updateSettings({ accent: option.id, accent_color: '' }, 'accent')
+                          }
                           className={cn(
                             'grid size-7 place-items-center rounded-full border-2 transition',
                             active
@@ -686,6 +702,33 @@ export function SettingsDialog({
                       </Tip>
                     )
                   })}
+                  <label
+                    className={cn(
+                      'relative grid size-7 cursor-pointer place-items-center rounded-full border-2 transition',
+                      settings.accent_color
+                        ? 'border-[var(--msv-accent-text)]'
+                        : 'border-transparent hover:border-line-strong',
+                    )}
+                    title={t('自定义颜色')}
+                  >
+                    <input
+                      type="color"
+                      aria-label={t('自定义颜色')}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                      value={settings.accent_color || '#2563eb'}
+                      onChange={(event) =>
+                        updateSettings({ accent_color: event.target.value }, 'accent')
+                      }
+                    />
+                    <span
+                      className="size-4 rounded-full border border-black/20"
+                      style={{
+                        background: settings.accent_color
+                          ? settings.accent_color
+                          : 'conic-gradient(from 0deg,#f87171,#fbbf24,#4ade80,#38bdf8,#a78bfa,#f472b6,#f87171)',
+                      }}
+                    />
+                  </label>
                 </div>
               </Row>
               <div className="h-px bg-line/70" />
@@ -1555,8 +1598,15 @@ export function SettingsDialog({
                   <ShieldCheck className="size-5" />
                 </span>
                 <div>
-                  <div className="font-display text-[0.9375rem] font-semibold text-ice-200">
-                    MedSafeVault <span className="text-[var(--msv-accent-text)]">v{state.version}</span>
+                  <div className="flex flex-wrap items-center gap-2 font-display text-[0.9375rem] font-semibold text-ice-200">
+                    <span>
+                      MedSafeVault <span className="text-[var(--msv-accent-text)]">v{state.version}</span>
+                    </span>
+                    {updateInfo?.available && (
+                      <span className="rounded-md border border-[color-mix(in_srgb,#f43f5e_38%,transparent)] bg-[color-mix(in_srgb,#f43f5e_10%,transparent)] px-1.5 py-0.5 font-mono text-[0.65625rem] font-normal text-rose-300">
+                        {t('最新 {version}', { version: updateInfo.version })}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[0.71875rem] text-ice-600">
                     {t('医安密管平台 · 本地桌面版')}
@@ -1642,6 +1692,64 @@ export function SettingsDialog({
                 '填写院内更新服务地址后，每次打开应用会自动检查一次版本；发现新版本时提示，下载的文件按 sha256 校验，替换与重启由后台助手完成，不需要管理员权限。',
               )}
             >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-[var(--msv-tint)] px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-x-1.5 text-[0.78125rem] text-ice-300">
+                    <span>{t('当前版本')}</span>
+                    <span className="font-mono text-ice-200">{state.version}</span>
+                    {updateInfo?.available && (
+                      <>
+                        <span className="text-ice-600">→</span>
+                        <span className="text-ice-600">{t('最新')}</span>
+                        <span className="font-mono text-[var(--msv-accent-text)]">
+                          {updateInfo.version}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-[0.6875rem] leading-relaxed text-ice-600">
+                    {updateInfo?.available
+                      ? t('有新版本可用，可以先看更新内容再决定。')
+                      : updateInfo
+                        ? t('已是最新版本。')
+                        : t('还没检查过，点右侧按钮试一次。')}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {updateInfo?.available ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={onViewNotes}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[0.75rem] text-ice-300 transition hover:border-line-strong hover:bg-[var(--msv-tint)]"
+                      >
+                        <FileText className="size-3.5" />
+                        {t('更新内容')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onQuickUpdate}
+                        className="btn-primary inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-[0.75rem] font-semibold transition hover:brightness-105"
+                      >
+                        <Download className="size-3.5" />
+                        {t('立即更新')}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={updateBusy}
+                      onClick={() => {
+                        void commitUpdateUrl().then(onCheckUpdate)
+                      }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[0.75rem] text-ice-300 transition hover:border-line-strong hover:bg-[var(--msv-tint)] disabled:opacity-60"
+                    >
+                      {updateBusy ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
+                      {t('检查更新')}
+                    </button>
+                  )}
+                </div>
+              </div>
               <label className="field-label" htmlFor="update-api-url">
                 {t('更新服务地址')}
               </label>
@@ -1661,16 +1769,6 @@ export function SettingsDialog({
                   }}
                   onBlur={commitUpdateUrl}
                 />
-                <button
-                  type="button"
-                  onClick={() => {
-                    void commitUpdateUrl().then(onCheckUpdate)
-                  }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[0.75rem] text-ice-300 transition hover:border-line-strong hover:bg-[var(--msv-tint)]"
-                >
-                  <RefreshCw className="size-3.5" />
-                  {t('检查更新')}
-                </button>
               </div>
               <p className="mt-1.5 text-[0.6875rem] leading-relaxed text-ice-600">
                 {t(

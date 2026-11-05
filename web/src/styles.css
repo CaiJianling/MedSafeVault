@@ -1339,6 +1339,185 @@
   background-clip: padding-box;
 }
 
+/* ------------------------------------------------------------- 行颜色 */
+
+/* 自定义行色走 CSS 变量：冻结列的底色、选中态的强调色叠加、悬停都沿用同一套规则，
+   不需要在每一格上写内联背景。 */
+.msv-table tbody tr[data-row-bg='true'] > td {
+  background-color: var(--row-bg);
+}
+
+.msv-table tbody tr[data-row-bg='true']:hover > td {
+  background-color: color-mix(in srgb, var(--row-bg) 90%, var(--msv-ink-950));
+}
+
+.msv-table tbody tr[data-row-bg='true'][data-active='true'] > td {
+  background-image: linear-gradient(var(--msv-accent-soft), var(--msv-accent-soft));
+}
+
+.msv-table tbody tr[data-row-fg='true'] > td {
+  color: var(--row-fg);
+}
+
+/* ------------------------------------------------------------- markdown 说明 */
+
+/* Update notes: compact typography that matches the rest of the dialog.
+   Everything is scoped under .md so the same classes can be reused later. */
+@layer components {
+  .md {
+    font-size: 0.78125rem;
+    line-height: 1.65;
+    color: var(--msv-ice-300);
+    overflow-wrap: anywhere;
+  }
+
+  .md > * + * {
+    margin-top: 0.45rem;
+  }
+
+  .md h1,
+  .md h2,
+  .md h3,
+  .md h4 {
+    font-weight: 600;
+    color: var(--msv-ice-200);
+    line-height: 1.4;
+  }
+
+  .md h1 {
+    font-size: 0.9375rem;
+  }
+
+  .md h2 {
+    font-size: 0.875rem;
+  }
+
+  .md h3,
+  .md h4 {
+    font-size: 0.8125rem;
+  }
+
+  .md ul,
+  .md ol {
+    padding-left: 1.15rem;
+  }
+
+  .md ul {
+    list-style: disc;
+  }
+
+  .md ol {
+    list-style: decimal;
+  }
+
+  .md li + li {
+    margin-top: 0.15rem;
+  }
+
+  .md li > ul,
+  .md li > ol {
+    margin-top: 0.15rem;
+  }
+
+  .md strong {
+    font-weight: 600;
+    color: var(--msv-ice-200);
+  }
+
+  .md em {
+    font-style: italic;
+  }
+
+  .md code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    padding: 0.05rem 0.3rem;
+    border-radius: 5px;
+    background: var(--msv-tint-strong);
+    color: var(--msv-ice-200);
+  }
+
+  .md pre {
+    padding: 0.5rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid var(--msv-line);
+    background: var(--msv-tint-strong);
+    overflow-x: auto;
+  }
+
+  .md pre code {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  .md blockquote {
+    padding-left: 0.65rem;
+    border-left: 3px solid var(--msv-line-strong);
+    color: var(--msv-ice-500);
+  }
+
+  .md hr {
+    border: 0;
+    border-top: 1px solid var(--msv-line);
+  }
+
+  .md table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+
+  .md th,
+  .md td {
+    padding: 0.25rem 0.45rem;
+    border: 1px solid var(--msv-line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .md th {
+    color: var(--msv-ice-200);
+    font-weight: 500;
+    background: var(--msv-tint);
+  }
+
+  .md .md-link {
+    color: var(--msv-accent-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+}
+
+/* A small red dot that says "有新版本没处理"; used on the settings button and
+   the 关于 tab. The ring keeps it readable on both light and dark surfaces. */
+.msv-dot {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.28rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #f43f5e;
+  box-shadow: 0 0 0 2px var(--msv-surface);
+  pointer-events: none;
+}
+
+@keyframes msv-dot-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.msv-dot {
+  animation: msv-dot-pop 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,
