@@ -136,6 +136,25 @@ set MSV_DEV_URL=http://localhost:5179
 
 免管理员说明：onefile 解压到 `%TEMP%`，数据写入 `%APPDATA%\MedSafeVault`，不写注册表、不需要安装运行库，拷到任意可写目录即可运行。
 
+### 版本号怎么改
+
+版本号只有两处真源，改完必须互相对齐（不会自动同步）：
+
+1. **`backend/__init__.py` 的 `__version__`** —— 唯一的功能性来源。设置 → 关于 里显示的「版本」、更新时与版本表比较的「当前版本」（`backend/updater.py` 靠它决定要不要提示更新）、请求更新服务的 User-Agent、日志里的 `Starting MedSafeVault …`，以及更新服务管理页面标题栏上的「桌面端 x.y.z」（`update/server.py` 直接对这个文件正则取值，不 import 后端）都读它。格式是点分数字，最多四段：`2.1.0`、`2.1`、`2.0.0.1` 都合法，比较时按四段数字补齐（`2.1` 等同 `2.1.0`）。
+2. **`packaging/version_info.txt`** —— exe 右键属性里的「文件版本 / 产品版本」，由 `MedSafeVault.spec` 第 93 行喂给 PyInstaller。同一个版本号在这个文件里要改四处：`filevers=(2, 0, 0, 0)`、`prodvers=(2, 0, 0, 0)`（四段数字元组，末段一般是 0）、`FileVersion` 与 `ProductVersion`（字符串）。
+
+改完重新打包并核对两边一致：
+
+```bash
+.venv\Scripts\python.exe tools\build_exe.py
+.venv\Scripts\python.exe -c "import backend; print(backend.__version__)"   # 源码里的版本
+powershell -NoProfile -Command "(Get-Item dist\MedSafeVault.exe).VersionInfo | Format-List FileVersion,ProductVersion"
+```
+
+发布这一步别漏：新版本要登记进更新服务，否则老客户端检查不到更新——管理后台上传发布，或命令行 `python update/make_release.py --exe dist/MedSafeVault.exe --version 2.1.0 --notes "这次改了什么"`。同时把 `README.md` 上面那行「当前产物体积 / sha256」按构建脚本打印的新值更新（构建结束会打印），并在第 9 节补一段验证记录。
+
+文档里其他出现 `2.0.0` 的地方（`update/README.md` 的示例输出、帮助页的 `GET /api/version?current=2.0.0`、管理页面自测框的 placeholder、`tools/test_*.py` 里的用例）都只是举例，不随版本走，不用改。
+
 ---
 
 ## 5. 安全模型
@@ -342,11 +361,12 @@ Win7 终端要跑本项目，需要一条独立的 32 位工具链：
 
 尚未覆盖：内置 VNC 的实际画面（本轮没有 VNC 服务，只验证了中继往返与演示模式 UI）、Win7 真机（需第 7 节的 32 位工具链）、杀毒软件白名单场景、以及 32 位固定版本 WebView2 的实际渲染。
 
-2026-11-05 把 `update/` 扩成带登录的 Web 管理后台，截图见 `screenshots/114-127`：
+2026-11-05 把 `update/` 扩成带登录的 Web 管理后台，截图见 `screenshots/114-129`：
 
 - **一个端口三件事**：`update/server.py` 现在同时提供桌面端用的只读接口、`/api/admin/*` 管理接口和 `update/web/dist` 里的 HeroUI 管理页面；仍然是纯标准库（`requirements.txt` 里说明了为什么 `pip install -r` 是空操作）。管理页面源码在 `update/web`（Vite + React 19 + Tailwind 4 + HeroUI 3，`node_modules` 是指向 `web/node_modules` 的目录链接，构建产物入库），拷走 `update/` 就能在 Linux 上 `python3 update/server.py` 直接跑，服务器上不需要 Node。
 - **凭据与会话**：`update/admin.json` 只存用户名 + 随机盐 + PBKDF2-SHA256（24 万次迭代）散列；首次启动按 `--password`/`MSV_UPDATE_PASSWORD` 创建，没给就随机生成一个并在终端打印（页面里标「还在用初始口令」并催着改）。会话是随机 token 的 `HttpOnly`/`SameSite=Lax` Cookie（默认 8 小时），改口令会让其他浏览器上的会话全部失效；同一 IP 连错 5 次锁 5 分钟，锁定期内即使口令正确也返回 429。除登录外的写操作还要求页面自带的 `X-Msv-Requested-With` 头。
 - **发布流程**：上传走「请求体就是文件字节」的两步式（`POST /api/admin/upload?name=` 先落 `files/.uploads/<token>`，边写边算 sha256 并 fsync，再 `POST /api/admin/releases` 带 token 登记），这样中断、超时、传一半放弃都只影响暂存文件，`versions.json` 永远只描述完整落盘的包；超过 `--max-upload` 直接 413 且不留残留，非 `.exe/.msi/.zip/…` 后缀被拒。文件名里没有版本号时自动补上（`MedSafeVault.exe` → `MedSafeVault-2.1.0.exe`），撞名再加序号；也可以选「用已有文件」直接登记 scp 进 `files/` 的产物。同版本重复登记返回 409 并提示勾选「覆盖同版本」。
 - **回滚与下架**：`PATCH /api/admin/releases/<版本>` 改说明/必须更新/发布日期/设为最新，`DELETE` 下架并可选连文件一起删（删不掉就只下架并说明原因）；管理视图额外回传 `exists`/`size_matches`/`hash_matches`，所以磁盘文件被换过、文件不见了都在列表里以 chip 明示。`versions.json` 一律原子写（临时文件 + `os.replace`）并在写入后失效缓存，服务端不重启也能立刻读到新版本表。
 - **真机验证**：无头 Chrome 走 CDP 把整条路跑了一遍并逐屏截图——登录页与口令错误提示（`114`、`115`）、登录后的总览（`116`）、拖文件上传后显示大小/进度/sha256 并自动猜出版本号（`117`、`118`）、发布成功的 toast 与两行版本表（`119`）、「用已有文件」下拉（`120`）、行内编辑说明（`121`）、行内下架确认（`122`）、地址卡片的一键自测与操作审计（`123`）、改口令表单（`124`）、人为改动磁盘文件后的「散列不符 / 大小不符」（`125`）、暗色主题（`126`）与 430px 窄屏（`127`）。`tools/test_update_admin.py` 另有 134 项断言覆盖散列不存明文、会话限速、登录/上传/登记/覆盖/回滚/下架/改口令、穿越防护、静态托管 MIME 与 ETag、以及 `backend/updater.py` 的 `check()` + `download()` 契约没被改坏。
+- **查看更新说明**：版本列表的行操作是「设为最新 · 下载 · 查看更新说明 · 下架」，点查看会在表格下方展开这块版本的只读详情（说明正文按行保留、发布日期、大小、完整 sha256、磁盘路径，文件不在或散列不符也在这里一并说明），面板里再点「编辑说明」才变成 textarea + 必须更新开关，保存后自动回到只读视图（`121`、`128`、`129`）；没写说明的版本明确提示「桌面端的更新弹窗里那段就是空的」。这样「看说明」不必先进入编辑态，也避免同一行放两个入口。
 - **踩到的三个坑**：一、HeroUI 的 `@heroui/styles` 里已经有 `.toast`、`.chip` 这类裸类名，页面自己的 `.toast` 被它带出 `position: absolute`，提示条整个飘到屏幕外——管理页面的自定义类统一加 `adm-` 前缀后才正常。二、HTTP/1.1 是长连接，任何没读完请求体的错误分支都会让下一条请求错位（表现为客户端「超时」）：写请求一律先 `drain_body()` 再回复，上传循环也只按 `Content-Length` 读，多读一个字节就会卡住。三、Windows 上 `SO_REUSEADDR` 允许两个进程同时绑同一端口，改完代码重启后老进程还在收包，看起来像「改动没生效」；现在 Windows 下不复用端口（Linux 保留复用，避免重启被 TIME_WAIT 卡住）。

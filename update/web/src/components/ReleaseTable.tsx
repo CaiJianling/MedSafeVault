@@ -4,6 +4,7 @@ import {
   Check,
   Download,
   FileQuestion,
+  FileText,
   Pencil,
   Star,
   Trash2,
@@ -15,7 +16,7 @@ import { toast } from '../lib/toast'
 import { cn, formatBytes, shortHash } from '../lib/utils'
 import { Chip, RowAction, Section, Spinner, Switch } from './primitives'
 
-type Open = { kind: 'edit' | 'delete'; version: string } | null
+type Open = { kind: 'view' | 'edit' | 'delete'; version: string } | null
 
 export function ReleaseTable({
   releases,
@@ -31,13 +32,19 @@ export function ReleaseTable({
 
   const total = releases.reduce((sum, item) => sum + (item.size_on_disk || item.size), 0)
 
-  async function run(version: string, label: string, action: () => Promise<unknown>) {
+  async function run(
+    version: string,
+    label: string,
+    action: () => Promise<unknown>,
+    options: { keepView?: boolean } = {},
+  ) {
     setBusy(version)
     try {
       await action()
       await onChanged()
       toast.success(`${label} · ${version}`)
-      setOpen(null)
+      // 保存完回到只读视图，让操作者立刻看到新说明生效了
+      setOpen(options.keepView ? { kind: 'view', version } : null)
     } catch (error) {
       toast.danger(errorMessage(error, `${label}失败`))
     } finally {
@@ -83,10 +90,10 @@ export function ReleaseTable({
             </thead>
             <tbody>
               {releases.map((release) => {
-                const editing = open?.kind === 'edit' && open.version === release.version
                 const deleting = open?.kind === 'delete' && open.version === release.version
+                const opened = open !== null && open.version === release.version
                 return (
-                  <tr key={release.version} data-active={editing || deleting ? 'true' : undefined}>
+                  <tr key={release.version} data-active={opened ? 'true' : undefined}>
                     <td className="whitespace-nowrap font-mono text-[0.8125rem] text-ice-200">
                       {release.version}
                     </td>
@@ -165,9 +172,13 @@ export function ReleaseTable({
                               <Download className="size-3.5" />
                             </a>
                             <RowAction
-                              icon={<Pencil className="size-3.5" />}
-                              label="编辑说明"
-                              onPress={() => (editing ? setOpen(null) : startEdit(release))}
+                              icon={<FileText className="size-3.5" />}
+                              label="查看更新说明"
+                              onPress={() =>
+                                open?.kind !== 'view' || open.version !== release.version
+                                  ? setOpen({ kind: 'view', version: release.version })
+                                  : setOpen(null)
+                              }
                             />
                             <RowAction
                               icon={<Trash2 className="size-3.5" />}
@@ -187,33 +198,77 @@ export function ReleaseTable({
         </div>
       )}
 
-      {open?.kind === 'edit'
+      {open && open.kind !== 'delete'
         ? (() => {
             const release = releases.find((item) => item.version === open.version)
             if (!release) return null
+            const editing = open.kind === 'edit'
             return (
               <div className="adm-rise mt-3 rounded-xl border border-line bg-[var(--msv-surface)] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h4 className="text-[0.8125rem] text-ice-200">
-                    编辑 <span className="font-mono">{release.version}</span>
+                    <span className="font-mono">{release.version}</span>
+                    <span className="ml-2 text-ice-500">
+                      {editing ? '编辑更新说明' : '更新说明'}
+                      {release.mandatory ? ' · 必须更新' : ''}
+                    </span>
                   </h4>
                   {busy === release.version ? <Spinner className="size-3.5 text-ice-500" /> : null}
                 </div>
-                <textarea
-                  className="msv-input"
-                  rows={3}
-                  maxLength={2000}
-                  value={draftNotes}
-                  placeholder="这次更新改了什么"
-                  onChange={(event) => setDraftNotes(event.target.value)}
-                />
-                <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
-                  <Switch checked={draftMandatory} onChange={setDraftMandatory} label="必须更新" />
-                  <span className="adm-hash min-w-0 flex-1">
-                    {release.path || release.file}
-                    {!release.exists ? ' · 磁盘上找不到这个文件' : ''}
-                  </span>
+
+                {editing ? (
+                  <textarea
+                    className="msv-input"
+                    rows={3}
+                    maxLength={2000}
+                    value={draftNotes}
+                    placeholder="这次更新改了什么"
+                    onChange={(event) => setDraftNotes(event.target.value)}
+                  />
+                ) : release.notes ? (
+                  <p className="whitespace-pre-line break-words text-[0.8125rem] leading-relaxed text-ice-300">
+                    {release.notes}
+                  </p>
+                ) : (
+                  <p className="text-[0.8125rem] leading-relaxed text-ice-600">
+                    这条版本没有写更新说明，桌面端的更新弹窗里那段就是空的。
+                  </p>
+                )}
+
+                {editing ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+                    <Switch
+                      checked={draftMandatory}
+                      onChange={setDraftMandatory}
+                      label="必须更新"
+                    />
+                  </div>
+                ) : (
+                  <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-[0.6875rem] sm:grid-cols-2">
+                    <div className="flex items-baseline gap-2">
+                      <dt className="shrink-0 text-ice-600">发布日期</dt>
+                      <dd className="adm-mono text-ice-400">{release.released_at || '—'}</dd>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <dt className="shrink-0 text-ice-600">大小</dt>
+                      <dd className="adm-mono text-ice-400">
+                        {release.size_text || formatBytes(release.size)}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline gap-2 sm:col-span-2">
+                      <dt className="shrink-0 text-ice-600">sha256</dt>
+                      <dd className="adm-hash min-w-0 break-all text-ice-400">
+                        {release.sha256 || '没有登记散列'}
+                      </dd>
+                    </div>
+                  </dl>
+                )}
+
+                <div className="adm-hash mt-3">
+                  {release.path || release.file}
+                  {!release.exists ? ' · 磁盘上找不到这个文件' : ''}
                 </div>
+
                 {release.exists && !release.hash_matches ? (
                   <div className="adm-note adm-note-danger mt-3">
                     <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -223,26 +278,43 @@ export function ReleaseTable({
                     </span>
                   </div>
                 ) : null}
+
                 <div className="mt-3 flex justify-end gap-2">
                   <Button variant="ghost" size="sm" onPress={() => setOpen(null)}>
-                    取消
+                    关闭
                   </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    isDisabled={busy === release.version}
-                    onPress={() =>
-                      void run(release.version, '已保存', () =>
-                        api.patch(release.version, {
-                          notes: draftNotes.trim(),
-                          mandatory: draftMandatory,
-                        }),
-                      )
-                    }
-                  >
-                    <Check className="mr-1 size-4" />
-                    保存
-                  </Button>
+                  {editing ? (
+                    <Button variant="ghost" size="sm" onPress={() => setOpen({ kind: 'view', version: release.version })}>
+                      取消编辑
+                    </Button>
+                  ) : (
+                    <Button variant="secondary" size="sm" onPress={() => startEdit(release)}>
+                      <Pencil className="mr-1.5 size-3.5" />
+                      编辑说明
+                    </Button>
+                  )}
+                  {editing ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      isDisabled={busy === release.version}
+                      onPress={() =>
+                        void run(
+                          release.version,
+                          '已保存',
+                          () =>
+                            api.patch(release.version, {
+                              notes: draftNotes.trim(),
+                              mandatory: draftMandatory,
+                            }),
+                          { keepView: true },
+                        )
+                      }
+                    >
+                      <Check className="mr-1 size-4" />
+                      保存
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             )
