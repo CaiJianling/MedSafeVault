@@ -36,7 +36,7 @@ export function SecretCell({
   }, [])
 
   if (!cell || !cell.has) {
-    return <span className="text-ice-600">—</span>
+    return <span className="text-[color:var(--row-ink-soft)]">—</span>
   }
 
   const masked = cell.masked
@@ -108,10 +108,10 @@ export function SecretCell({
             type="button"
             aria-label={t('复制{label}', { label })}
             onClick={copy}
-            className="grid size-5 place-items-center rounded text-ice-600 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-300"
+            className="grid size-5 place-items-center rounded text-[color:var(--row-ink-soft)] transition hover:bg-[var(--row-hover)] hover:text-[color:var(--row-ink)]"
           >
             {copied ? (
-              <Check className="size-3 text-[var(--msv-accent-text)]" />
+              <Check className="size-3 text-[color:var(--row-accent)]" />
             ) : (
               <Copy className="size-3" />
             )}
@@ -125,8 +125,8 @@ export function SecretCell({
     <div className="flex min-w-0 items-center gap-1.5">
       <div className="relative min-w-0 flex-1">
         {revealed ? (
-          <div className="relative overflow-hidden rounded-md border border-[color-mix(in_srgb,var(--msv-accent)_28%,transparent)] bg-[var(--msv-accent-soft)] px-2 py-0.5">
-            <span className="secret-shown block truncate pr-1 font-mono text-[0.75rem] text-[var(--msv-accent-text)]">
+          <div className="relative overflow-hidden rounded-md border border-[var(--row-reveal-line)] bg-[var(--row-reveal)] px-2 py-0.5">
+            <span className="secret-shown block truncate pr-1 font-mono text-[0.75rem] text-[color:var(--row-accent)]">
               {revealed || '∅'}
             </span>
             <span key={nonce} className="secret-countdown" />
@@ -148,8 +148,8 @@ export function SecretCell({
             className={cn(
               'grid size-6 place-items-center rounded-md transition',
               revealed
-                ? 'bg-[var(--msv-accent-soft)] text-[var(--msv-accent-text)] hover:brightness-110'
-                : 'text-ice-600 hover:bg-[var(--msv-tint-strong)] hover:text-ice-300',
+                ? 'bg-[var(--row-reveal)] text-[color:var(--row-accent)] hover:brightness-110'
+                : 'text-[color:var(--row-ink-soft)] hover:bg-[var(--row-hover)] hover:text-[color:var(--row-ink)]',
             )}
           >
             {loading ? (
@@ -174,10 +174,10 @@ export function SecretCell({
             type="button"
             aria-label={t('复制密码')}
             onClick={copy}
-            className="grid size-6 place-items-center rounded-md text-ice-600 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-300"
+            className="grid size-6 place-items-center rounded-md text-[color:var(--row-ink-soft)] transition hover:bg-[var(--row-hover)] hover:text-[color:var(--row-ink)]"
           >
             {copied ? (
-              <Check className="size-3.5 text-[var(--msv-accent-text)]" />
+              <Check className="size-3.5 text-[color:var(--row-accent)]" />
             ) : (
               <Copy className="size-3.5" />
             )}

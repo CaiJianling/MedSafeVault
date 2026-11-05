@@ -806,6 +806,16 @@
   .msv-table tbody tr {
     --msv-row-bg: transparent;
     --msv-frozen-bg: var(--msv-table-sticky);
+    /* Per-row palette. A plain row reads the theme values; a row with a custom
+       colour gets `--row-ink` from the record (or the contrast-inverted label),
+       and every quieter step is derived from it, so the icons, the — marks and
+       the mask dots follow the background instead of staying theme grey. */
+    --row-ink: var(--msv-ice-300);
+    --row-ink-soft: var(--msv-ice-500);
+    --row-hover: var(--msv-tint-strong);
+    --row-accent: var(--msv-accent-text);
+    --row-reveal: var(--msv-accent-soft);
+    --row-reveal-line: color-mix(in srgb, var(--msv-accent) 28%, transparent);
     background: var(--msv-row-bg);
     transition: background 140ms ease;
   }
@@ -984,7 +994,7 @@
     padding: 0 0.75rem;
     border-bottom: 1px solid var(--msv-line);
     vertical-align: middle;
-    color: var(--msv-ice-300);
+    color: var(--row-ink);
   }
 
   .msv-table td:first-child {
@@ -1116,7 +1126,7 @@
 
   .mask-dots {
     letter-spacing: 0.14em;
-    color: var(--msv-ice-500);
+    color: var(--row-ink-soft);
     font-family: var(--font-mono);
     font-size: 0.75rem;
   }
@@ -1131,7 +1141,7 @@
     right: 0;
     bottom: 0;
     height: 0.0625rem;
-    background: linear-gradient(90deg, var(--msv-accent), transparent);
+    background: linear-gradient(90deg, var(--row-accent), transparent);
     transform-origin: left;
     animation: secret-countdown 20s linear forwards;
   }
@@ -1342,7 +1352,17 @@
 /* ------------------------------------------------------------- 行颜色 */
 
 /* 自定义行色走 CSS 变量：冻结列的底色、选中态的强调色叠加、悬停都沿用同一套规则，
-   不需要在每一格上写内联背景。 */
+   不需要在每一格上写内联背景。`--row-ink` 由 RecordTable 写入（用户指定的文字色，
+   或按底色亮度反色得到的近黑/近白），行内的图标、掩码圆点、占位破折号、链接强调色
+   全部从它派生，所以换底色时它们会一起翻面，而不是继续用主题的灰色阶。 */
+.msv-table tbody tr[data-row-bg='true'] {
+  --row-ink-soft: color-mix(in srgb, var(--row-ink) 66%, var(--row-bg));
+  --row-hover: color-mix(in srgb, var(--row-ink) 15%, var(--row-bg));
+  --row-accent: color-mix(in srgb, var(--msv-accent-text) 45%, var(--row-ink));
+  --row-reveal: color-mix(in srgb, var(--row-ink) 12%, var(--row-bg));
+  --row-reveal-line: color-mix(in srgb, var(--row-ink) 30%, var(--row-bg));
+}
+
 .msv-table tbody tr[data-row-bg='true'] > td {
   background-color: var(--row-bg);
 }
@@ -1355,8 +1375,83 @@
   background-image: linear-gradient(var(--msv-accent-soft), var(--msv-accent-soft));
 }
 
-.msv-table tbody tr[data-row-fg='true'] > td {
-  color: var(--row-fg);
+/* 勾选框：底色跟行走，边框用行前景色的浅层，避免在浅色行上留一块主题白。 */
+.msv-table tbody tr[data-row-bg='true'] .msv-check {
+  background: var(--row-hover);
+  border-color: color-mix(in srgb, var(--row-ink) 38%, var(--row-bg));
+}
+
+/* ------------------------------------------------------- 页面说明区颜色 */
+
+/* 标签页设了颜色时，下方那块页面说明区（图标、边框、渐变底）跟着同一支色走。
+   未设色的页面完全不进这段规则，外观保持主题原样。 */
+.msv-page-head[data-tint='true'] {
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--page-color) 13%, transparent),
+      color-mix(in srgb, var(--page-color) 2%, transparent)
+    ),
+    color-mix(in srgb, var(--msv-surface) 62%, transparent);
+  border-color: color-mix(in srgb, var(--page-color) 34%, var(--msv-line));
+}
+
+.msv-page-head[data-tint='true'] .msv-page-head__icon {
+  color: color-mix(in srgb, var(--page-color) 72%, var(--msv-ice-200));
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--page-color) 20%, transparent),
+    color-mix(in srgb, var(--page-color) 5%, transparent)
+  );
+  border-color: color-mix(in srgb, var(--page-color) 30%, transparent);
+}
+
+.msv-page-head[data-tint='true'] .msv-page-head__accent {
+  color: color-mix(in srgb, var(--page-color) 72%, var(--msv-ice-200));
+}
+
+/* ---------------------------------------------------- 取色器（HeroUI） */
+
+/* HeroUI 的 ColorPicker 触发器默认只有文字+圆形色块，这里把它收成一颗胶囊：
+   色块 + 十六进制值 + 展开箭头。未选色时用彩虹底暗示「任选」，文字退回「默认」。 */
+.msv-color__trigger {
+  gap: 0.4rem;
+  height: 1.75rem;
+  padding: 0 0.5rem 0 0.35rem;
+  border: 1px solid var(--msv-line-strong);
+  border-radius: 999px;
+  background: var(--msv-tint);
+}
+
+.msv-color__trigger:hover {
+  background: var(--msv-tint-strong);
+}
+
+.msv-color__trigger .msv-color__swatch {
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.18);
+}
+
+.msv-color__trigger[data-empty='true'] .msv-color__swatch {
+  background: conic-gradient(
+    from 0deg,
+    #f87171,
+    #fbbf24,
+    #4ade80,
+    #38bdf8,
+    #a78bfa,
+    #f472b6,
+    #f87171
+  );
+}
+
+/* 弹层跟随应用自己的圆角与描边，和 HeroUI 的模态框保持一致。 */
+.msv-color__popover {
+  border: 1px solid var(--msv-line-strong);
+  border-radius: 0.875rem;
+}
+
+.msv-color__popover .color-swatch-picker__item {
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
 }
 
 /* ------------------------------------------------------------- markdown 说明 */

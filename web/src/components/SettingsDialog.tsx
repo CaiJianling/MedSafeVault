@@ -22,7 +22,7 @@ import {
   Type,
   Upload,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { ThemeMode } from '../App'
 import { ApiError, api, copyText } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
@@ -48,6 +48,7 @@ import {
   shortPath,
 } from '../lib/utils'
 import {
+  ColorPicker,
   IconButton,
   ModalFrame,
   Section,
@@ -400,6 +401,23 @@ export function SettingsDialog({
     }
   }
 
+  /**
+   * Accent picked in the HeroUI ColorPicker fires on every drag frame, so the
+   * theme preview is applied straight away and the write to the vault follows
+   * 300ms after the pointer stops — one save per gesture instead of one per
+   * frame, and the whole window repaints live.
+   */
+  const accentTimer = useRef<number | undefined>(undefined)
+  function previewAccent(hex: string) {
+    const next = { ...settings, accent_color: hex }
+    setSettings(next)
+    onSettings(next)
+    if (accentTimer.current) window.clearTimeout(accentTimer.current)
+    accentTimer.current = window.setTimeout(() => {
+      void updateSettings({ accent_color: hex }, 'accent')
+    }, 300)
+  }
+
   /** The update endpoint is free text: committed on blur, and before a manual
    *  check, so clicking 检查更新 right after typing does not use the old value. */
   function commitUpdateUrl(): Promise<void> {
@@ -672,63 +690,43 @@ export function SettingsDialog({
               <div className="h-px bg-line/70" />
               <Row
                 title={t('主题配色')}
-                description={t('预设配色会同时适配亮色与暗色；也可以点最后一个圆环自己取色，文字色阶与按钮标签会按对比度自动调整。')}
+                description={t('预设配色会同时适配亮色与暗色；也可以点右边的取色器自己选色，文字色阶与按钮标签会按对比度自动调整。')}
               >
-                <div className="flex items-center gap-1.5">
-                  {ACCENT_OPTIONS.map((option) => {
-                    const active = !settings.accent_color && settings.accent === option.id
-                    return (
-                      <Tip key={option.id} text={t(option.name)}>
-                        <button
-                          type="button"
-                          data-accent={option.id}
-                          aria-label={t(option.name)}
-                          aria-pressed={active}
-                          onClick={() =>
-                            updateSettings({ accent: option.id, accent_color: '' }, 'accent')
-                          }
-                          className={cn(
-                            'grid size-7 place-items-center rounded-full border-2 transition',
-                            active
-                              ? 'border-[var(--msv-accent-text)]'
-                              : 'border-transparent hover:border-line-strong',
-                          )}
-                        >
-                          <span
-                            className="size-4 rounded-full"
-                            style={{ background: 'var(--msv-accent)' }}
-                          />
-                        </button>
-                      </Tip>
-                    )
-                  })}
-                  <label
-                    className={cn(
-                      'relative grid size-7 cursor-pointer place-items-center rounded-full border-2 transition',
-                      settings.accent_color
-                        ? 'border-[var(--msv-accent-text)]'
-                        : 'border-transparent hover:border-line-strong',
-                    )}
-                    title={t('自定义颜色')}
-                  >
-                    <input
-                      type="color"
-                      aria-label={t('自定义颜色')}
-                      className="absolute inset-0 cursor-pointer opacity-0"
-                      value={settings.accent_color || '#2563eb'}
-                      onChange={(event) =>
-                        updateSettings({ accent_color: event.target.value }, 'accent')
-                      }
-                    />
-                    <span
-                      className="size-4 rounded-full border border-black/20"
-                      style={{
-                        background: settings.accent_color
-                          ? settings.accent_color
-                          : 'conic-gradient(from 0deg,#f87171,#fbbf24,#4ade80,#38bdf8,#a78bfa,#f472b6,#f87171)',
-                      }}
-                    />
-                  </label>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {ACCENT_OPTIONS.map((option) => {
+                      const active = !settings.accent_color && settings.accent === option.id
+                      return (
+                        <Tip key={option.id} text={t(option.name)}>
+                          <button
+                            type="button"
+                            data-accent={option.id}
+                            aria-label={t(option.name)}
+                            aria-pressed={active}
+                            onClick={() =>
+                              updateSettings({ accent: option.id, accent_color: '' }, 'accent')
+                            }
+                            className={cn(
+                              'grid size-7 place-items-center rounded-full border-2 transition',
+                              active
+                                ? 'border-[var(--msv-accent-text)]'
+                                : 'border-transparent hover:border-line-strong',
+                            )}
+                          >
+                            <span
+                              className="size-4 rounded-full"
+                              style={{ background: 'var(--msv-accent)' }}
+                            />
+                          </button>
+                        </Tip>
+                      )
+                    })}
+                  </div>
+                  <ColorPicker
+                    value={settings.accent_color || ''}
+                    onChange={(next) => previewAccent(next)}
+                    ariaLabel={t('自定义颜色')}
+                  />
                 </div>
               </Row>
               <div className="h-px bg-line/70" />

@@ -132,15 +132,19 @@ const EN: Record<string, string> = {
   '回收站': 'Recycle bin',
   '设置': 'Settings',
   '标签颜色': 'Tab colour',
-  '页面设置里的「标签颜色」会给页签的图标、计数与下划线换色；记录编辑里的「行外观」可以只给这一行设背景色和文字颜色，方便标出重点系统，只影响列表显示、不改变数据。': 'The tab colour in page settings recolours the tab icon, counter and underline; the row appearance in the record editor sets a background and text colour for that single row, which is handy for marking critical systems and only affects the list, never the data.',
+  '页面设置里的「标签颜色」会给页签的图标、计数、下划线以及标签下方的页面说明区换色；记录编辑里的「行外观」可以只给这一行设背景色和文字颜色，方便标出重点系统，只影响列表显示、不改变数据。': 'The tab colour in page settings recolours the tab icon, counter and underline, and the page banner right under the tabs; the row appearance in the record editor sets a background and text colour for that single row, which is handy for marking critical systems and only affects the list, never the data.',
   '自定义颜色': 'Custom colour',
   '行外观（可选）': 'Row appearance (optional)',
   '行背景': 'Row background',
   '文字颜色': 'Text colour',
   '行背景颜色': 'Row background colour',
   '恢复默认': 'Reset',
-  '只影响列表里的这一行；文字颜色不填时跟随主题，深色背景请配浅色文字。': 'Only affects this row in the list; the text colour follows the theme unless set, and a dark background needs light text.',
+  '只影响列表里的这一行；不填时跟随主题，底色太深会自动配浅色文字，文字色对比度不够时只调明度、保持色相，行内的图标与按钮也一起翻色。': 'Only this row, and only in the list. Leave the text colour empty to follow the theme; a dark background gets light text automatically, a low-contrast text colour keeps its hue but shifts lightness until it reads, and the icons and buttons inside the row flip with it.',
   '默认': 'Default',
+  '取色区域': 'Colour area',
+  '色相': 'Hue',
+  '十六进制颜色': 'Hex colour',
+  '跟随主题': 'Follows the theme',
   '设置（有新版本）': 'Settings (update available)',
   '设置 · 有新版本': 'Settings · update available',
   '锁定': 'Lock',
@@ -708,8 +712,8 @@ const EN: Record<string, string> = {
   '主题配色': 'Accent colour',
   '配色会同时适配亮色与暗色，所有色值都按对比度校准过。':
     'Each palette is tuned for both light and dark, and every value was checked for contrast.',
-  '预设配色会同时适配亮色与暗色；也可以点最后一个圆环自己取色，文字色阶与按钮标签会按对比度自动调整。':
-    'The presets are tuned for light and dark; the last ring opens a colour picker, and both the text ramp and the button labels adjust themselves for contrast.',
+  '预设配色会同时适配亮色与暗色；也可以点右边的取色器自己选色，文字色阶与按钮标签会按对比度自动调整。':
+    'The presets are tuned for light and dark; the colour picker on the right takes any colour you like, and both the text ramp and the button labels adjust themselves for contrast.',
   '界面字体': 'Interface font',
   '留空使用系统默认；列表来自本机已安装的字体。':
     'Leave empty for the system default; the list comes from fonts installed on this machine.',
@@ -927,8 +931,8 @@ const EN: Record<string, string> = {
   '搜索框跨列模糊匹配；底栏可直接点页码，页数多时还能「跳至」指定页并切换每页条数。': 'The search box matches across all columns; the footer has page buttons, plus a jump box and a page-size selector once there are many pages.',
   '操作系统、厂商等列会联想本机已录入过的值，密码列永不联想、也不会出现在提示里。': 'Columns such as OS or vendor suggest values already entered on this machine; password columns never suggest and never appear in suggestions.',
   '设置 → 常规 中可切换列表等宽字体、界面字体与代码字体、界面大小（小/标准/大）、强调色与亮暗主题。': 'Settings → General switches the monospace list font, the UI and code fonts, the interface size (small/standard/large), the accent colour and the light/dark theme.',
-  '强调色除了 8 套预设，末尾的圆环可以用取色器自选颜色：正文/图标里的强调色会自动调深或调浅到看得清，实心按钮的标签则按底色亮度在黑与白之间自动反色。':
-    'Besides the eight presets, the last ring opens a colour picker; accent text and icons are nudged lighter or darker until they read, and filled buttons switch their label between black and white by the background luminance.',
+  '强调色除了 8 套预设，还可以用取色器自选任意颜色：正文/图标里的强调色会自动调深或调浅到看得清，实心按钮的标签则按底色亮度在黑与白之间自动反色。':
+    'Besides the eight presets, the colour picker (HeroUI ColorPicker) takes any colour you like; accent text and icons are nudged lighter or darker until they read, and filled buttons switch their label between black and white by the background luminance.',
   '环境变量': 'Environment variables',
   '环境变量只影响本机当前用户或启动脚本，不写入注册表。临时使用可在命令行里设置后再启动程序：': 'Environment variables affect only the current user or the launching script and never touch the registry. For a one-off run, set it in a command prompt and start the app:',
   '变量': 'Variable',

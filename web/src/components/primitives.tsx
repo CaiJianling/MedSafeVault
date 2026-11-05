@@ -1,4 +1,15 @@
-import { Button, Drawer, Modal } from '@heroui/react'
+import {
+  Button,
+  ColorArea,
+  ColorField,
+  ColorPicker as HeroColorPicker,
+  ColorSlider,
+  ColorSwatch,
+  ColorSwatchPicker,
+  Drawer,
+  Label,
+  Modal,
+} from '@heroui/react'
 import { Check, ChevronDown } from 'lucide-react'
 import {
   createContext,
@@ -12,6 +23,8 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { parseHex } from '../lib/colors'
+import { useI18n } from '../lib/i18n'
 import { cn, passwordStrength } from '../lib/utils'
 
 type ButtonVariant =
@@ -58,8 +71,10 @@ export function IconButton({
       isDisabled={disabled}
       onPress={onPress}
       className={cn(
-        'relative size-8 min-w-8 rounded-lg text-ice-500 transition-colors',
-        'data-[hovered=true]:bg-[var(--msv-tint-strong)] data-[hovered=true]:text-ice-200',
+        // 行内使用（记录列表）时颜色走 --row-* 变量，自定义行色的行里按钮会跟着
+        // 底色翻面；在表格之外这些变量没定义，落回主题色阶，外观不变。
+        'relative size-8 min-w-8 rounded-lg text-[color:var(--row-ink-soft,var(--msv-ice-500))] transition-colors',
+        'data-[hovered=true]:bg-[var(--row-hover,var(--msv-tint-strong))] data-[hovered=true]:text-[color:var(--row-ink,var(--msv-ice-200))]',
         'data-[pressed=true]:scale-95',
         className,
       )}
@@ -312,65 +327,113 @@ export const PAGE_COLORS = [
   '#ec4899', '#f43f5e', '#f59e0b', '#64748b',
 ]
 
-/** Swatches + a native colour input + "默认"; empty string means follow the theme. */
+/** Seed for an unset value: the popover always has something to show. */
+const FALLBACK_COLOR = '#2563eb'
+
+/** HeroUI hands back `#rrggbb` (sometimes with alpha); the store wants lowercase 6. */
+function toHex6(value: string): string {
+  const text = String(value || '').trim().toLowerCase()
+  return parseHex(/^#[0-9a-f]{8}$/.test(text) ? text.slice(0, 7) : text)
+}
+
+/**
+ * HeroUI's own colour picker (ColorPicker + ColorArea + ColorSlider +
+ * ColorSwatchPicker + ColorField) wrapped in the app's contract: the value is
+ * `#rrggbb` or `""`, and `""` means "follow the theme". The popover keeps the
+ * preset swatches, a free pick area, a hue slider and an exact hex field, so
+ * nothing the old hand-rolled row could do is lost — only the native
+ * `input[type=color]` dialog is replaced.
+ */
 export function ColorPicker({
   value,
-  palette,
+  palette = [],
   onChange,
   ariaLabel,
+  className,
+  placement = 'bottom left',
 }: {
   value: string
-  palette: string[]
+  palette?: string[]
   onChange: (next: string) => void
   ariaLabel: string
+  className?: string
+  placement?: 'bottom left' | 'top left' | 'right'
 }) {
+  const { t } = useI18n()
+  const hex = toHex6(value)
+  // The popover needs a real colour to show; an unset value stays invisible
+  // behind the rainbow swatch + 默认 label on the trigger.
+  const current = hex || FALLBACK_COLOR
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={ariaLabel}>
-      {palette.map((color) => {
-        const active = value.toLowerCase() === color
-        return (
-          <button
-            key={color}
-            type="button"
-            aria-label={color}
-            aria-pressed={active}
-            title={color}
-            onClick={() => onChange(active ? '' : color)}
-            className={cn(
-              'size-5 rounded-full border border-black/15 transition',
-              active
-                ? 'ring-2 ring-[var(--msv-accent)] ring-offset-2 ring-offset-[var(--msv-surface)]'
-                : 'hover:scale-110',
-            )}
-            style={{ background: color }}
-          />
-        )
-      })}
-      <label
-        className={cn(
-          'relative grid size-5 cursor-pointer place-items-center overflow-hidden rounded-full border border-line text-ice-500 transition hover:text-ice-200',
-          // 自定义颜色：用渐变底暗示「任选」
-          'bg-[conic-gradient(from_0deg,#f87171,#fbbf24,#4ade80,#38bdf8,#a78bfa,#f472b6,#f87171)]',
-          value && !palette.some((color) => color === value.toLowerCase()) && 'ring-2 ring-[var(--msv-accent)] ring-offset-2 ring-offset-[var(--msv-surface)]',
-        )}
-        title={ariaLabel}
+    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+      <HeroColorPicker
+        value={current}
+        onChange={(color) => {
+          const next = toHex6(color.toString('hex'))
+          if (next && next !== hex) onChange(next)
+        }}
       >
-        <input
-          type="color"
+        <HeroColorPicker.Trigger
           aria-label={ariaLabel}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          value={value || '#ffffff'}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <span className="pointer-events-none size-2 rounded-full bg-white/85 shadow" />
-      </label>
-      {value ? (
+          data-empty={hex ? undefined : 'true'}
+          className="group/msv-color msv-color__trigger"
+        >
+          <ColorSwatch size="sm" shape="circle" className="msv-color__swatch shrink-0" />
+          <span className="font-mono text-[0.6875rem] uppercase leading-none tracking-wide text-ice-500 transition-colors group-hover/msv-color:text-ice-200">
+            {hex || t('默认')}
+          </span>
+          <ChevronDown className="size-3 shrink-0 text-ice-600 transition-colors group-hover/msv-color:text-ice-400" />
+        </HeroColorPicker.Trigger>
+        <HeroColorPicker.Popover className="msv-color__popover gap-2.5" placement={placement}>
+          {palette.length > 0 && (
+            <ColorSwatchPicker aria-label={ariaLabel} size="sm">
+              {palette.map((preset) => (
+                <ColorSwatchPicker.Item key={preset} color={preset} aria-label={preset}>
+                  <ColorSwatchPicker.Swatch />
+                  <ColorSwatchPicker.Indicator />
+                </ColorSwatchPicker.Item>
+              ))}
+            </ColorSwatchPicker>
+          )}
+          <ColorArea
+            aria-label={t('取色区域')}
+            className="max-w-full"
+            colorSpace="hsb"
+            xChannel="saturation"
+            yChannel="brightness"
+          >
+            <ColorArea.Thumb />
+          </ColorArea>
+          <ColorSlider
+            aria-label={t('色相')}
+            channel="hue"
+            colorSpace="hsb"
+            className="gap-1 px-1"
+          >
+            <Label className="text-[0.6875rem] text-ice-600">{t('色相')}</Label>
+            <ColorSlider.Output className="font-mono text-[0.6875rem] text-ice-500" />
+            <ColorSlider.Track>
+              <ColorSlider.Thumb />
+            </ColorSlider.Track>
+          </ColorSlider>
+          <ColorField aria-label={t('十六进制颜色')}>
+            <ColorField.Group variant="secondary">
+              <ColorField.Prefix>
+                <ColorSwatch size="xs" shape="circle" />
+              </ColorField.Prefix>
+              <ColorField.Input />
+            </ColorField.Group>
+          </ColorField>
+        </HeroColorPicker.Popover>
+      </HeroColorPicker>
+      {hex ? (
         <button
           type="button"
           onClick={() => onChange('')}
           className="h-6 rounded-md px-1.5 text-[0.6875rem] text-ice-500 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-200"
         >
-          默认
+          {t('默认')}
         </button>
       ) : null}
     </div>

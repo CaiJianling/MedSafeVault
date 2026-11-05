@@ -12,6 +12,7 @@ import type { CSSProperties } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import type { Column, ConnectMode, RecordItem } from '../lib/types'
 import { copyText } from '../lib/api'
+import { parseHex, readableOn, readableVariant, rowSurface } from '../lib/colors'
 import { useI18n } from '../lib/i18n'
 import { toast } from '../lib/toast'
 import { cn, isMonospaceColumn } from '../lib/utils'
@@ -118,10 +119,10 @@ function CopyAction({ value, label }: { value: string; label: string }) {
         type="button"
         aria-label={t('复制{label}', { label })}
         onClick={copy}
-        className="grid size-5 place-items-center rounded text-ice-600 transition hover:bg-[var(--msv-tint-strong)] hover:text-ice-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--msv-accent)]"
+        className="grid size-5 place-items-center rounded text-[color:var(--row-ink-soft)] transition hover:bg-[var(--row-hover)] hover:text-[color:var(--row-ink)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--msv-accent)]"
       >
         {copied ? (
-          <Check className="size-3 text-[var(--msv-accent-text)]" />
+          <Check className="size-3 text-[color:var(--row-accent)]" />
         ) : (
           <Copy className="size-3" />
         )}
@@ -310,23 +311,23 @@ export function RecordTable({
             : rows.map((row) => {
                 const checked = selected.has(row.id)
                 const target = dropAt && dropAt.id === row.id && dragging !== row.id ? dropAt : null
-                const rowTint = row.row_bg || ''
-                const rowInk = row.row_fg || ''
+                const rowTint = parseHex(row.row_bg)
+                const rowInk = parseHex(row.row_fg)
+                // 用户写明的文字色优先；只设了底色时按底色亮度反色（近黑/近白），
+                // 这样行里的图标、掩码和破折号也一起翻面。只设了文字色而底色跟随主题
+                // 时，把这支色按主题底色调到看得清（保持色相，只动明度）。
+                const ink = rowTint ? rowInk || readableOn(rowTint) : readableVariant(rowInk, rowSurface())
+                const rowVars = {
+                  '--row-bg': rowTint || undefined,
+                  '--row-ink': ink || undefined,
+                } as CSSProperties
                 return (
                   <tr
                     key={row.id}
                     className="group/row"
                     data-active={checked || undefined}
                     data-row-bg={rowTint ? 'true' : undefined}
-                    data-row-fg={rowInk ? 'true' : undefined}
-                    style={
-                      rowTint || rowInk
-                        ? ({
-                            '--row-bg': rowTint || undefined,
-                            '--row-fg': rowInk || undefined,
-                          } as CSSProperties)
-                        : undefined
-                    }
+                    style={rowTint || ink ? rowVars : undefined}
                     data-dnd={target ? (target.above ? 'above' : 'below') : undefined}
                     data-source={dragging === row.id || undefined}
                     draggable={canReorder && armed === row.id}
@@ -383,9 +384,9 @@ export function RecordTable({
                         onMouseUp={() => setArmed(null)}
                         onMouseLeave={() => setArmed(null)}
                         className={cn(
-                          'grid size-5 place-items-center rounded text-ice-600 transition',
+                          'grid size-5 place-items-center rounded text-[color:var(--row-ink-soft)] transition',
                           canReorder
-                            ? 'cursor-grab hover:bg-[var(--msv-tint-strong)] hover:text-ice-300 active:cursor-grabbing'
+                            ? 'cursor-grab hover:bg-[var(--row-hover)] hover:text-[color:var(--row-ink)] active:cursor-grabbing'
                             : 'cursor-not-allowed opacity-40',
                         )}
                       >
@@ -433,11 +434,11 @@ export function RecordTable({
                                 className={cn(
                                   'min-w-0 flex-1 truncate',
                                   isMonospaceColumn(column) && 'font-mono text-[0.75rem] tabular-nums',
-                                  column.type === 'url' && 'text-[var(--msv-accent-text)]',
+                                  column.type === 'url' && 'text-[color:var(--row-accent)]',
                                 )}
                                 title={cell?.has ? cell.value : undefined}
                               >
-                                {cell?.has ? cell.value : <span className="text-ice-600">—</span>}
+                                {cell?.has ? cell.value : <span className="text-[color:var(--row-ink-soft)]">—</span>}
                               </span>
                               {cell?.has ? (
                                 <CopyAction value={cell.value} label={column.label} />

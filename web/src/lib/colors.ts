@@ -112,6 +112,25 @@ export function readableOn(hex: string): string {
 }
 
 /**
+ * Same hue, nudged until it reads on `surface`. Used for a text colour the
+ * operator picked for a row that has no background of its own: a pale amber
+ * stays pale amber on a dark row, and darkens on a white one.
+ */
+export function readableVariant(color: string, surface: string, target = 4.5): string {
+  const hex = parseHex(color)
+  const background = parseHex(surface)
+  if (!hex || !background) return color
+  if (contrast(hex, background) >= target) return hex
+  return hslToHex(tuneForSurface(hexToHsl(hex), background, target))
+}
+
+/** What an untinted row is really painted on, per theme (see --msv-table-sticky). */
+export function rowSurface(root?: HTMLElement): string {
+  const element = root || (typeof document === 'undefined' ? null : document.documentElement)
+  return element && element.classList.contains('dark') ? SURFACE_DARK : SURFACE_LIGHT
+}
+
+/**
  * Write the accent tokens for a custom colour on <html>. Inline variables beat
  * every `[data-accent]` block in the stylesheet, and clearing them (passing "")
  * hands control back to the selected preset.

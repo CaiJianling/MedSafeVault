@@ -1,8 +1,10 @@
 import { Button } from '@heroui/react'
 import {
   AlertTriangle,
+  Braces,
   Check,
   Download,
+  Eye,
   FileQuestion,
   FileText,
   Pencil,
@@ -10,11 +12,14 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { api, errorMessage, type Release } from '../lib/api'
 import { toast } from '../lib/toast'
 import { cn, formatBytes, shortHash } from '../lib/utils'
 import { Chip, RowAction, Section, Spinner, Switch } from './primitives'
+
+/** 只在点开「详情」时才用到的 Markdown 渲染器：单独一个 chunk，登录页不背它。 */
+const Markdown = lazy(() => import('./Markdown').then((module) => ({ default: module.Markdown })))
 
 type Open = { kind: 'view' | 'edit' | 'delete'; version: string } | null
 
@@ -29,6 +34,8 @@ export function ReleaseTable({
   const [draftNotes, setDraftNotes] = useState('')
   const [draftMandatory, setDraftMandatory] = useState(false)
   const [busy, setBusy] = useState('')
+  // 「详情」默认给渲染后的预览，需要核对原文时再切回去。
+  const [notesMode, setNotesMode] = useState<'render' | 'raw'>('render')
 
   const total = releases.reduce((sum, item) => sum + (item.size_on_disk || item.size), 0)
 
@@ -174,11 +181,14 @@ export function ReleaseTable({
                             <RowAction
                               icon={<FileText className="size-3.5" />}
                               label="查看更新说明"
-                              onPress={() =>
-                                open?.kind !== 'view' || open.version !== release.version
-                                  ? setOpen({ kind: 'view', version: release.version })
-                                  : setOpen(null)
-                              }
+                              onPress={() => {
+                                if (open?.kind === 'view' && open.version === release.version) {
+                                  setOpen(null)
+                                  return
+                                }
+                                setNotesMode('render')
+                                setOpen({ kind: 'view', version: release.version })
+                              }}
                             />
                             <RowAction
                               icon={<Trash2 className="size-3.5" />}
@@ -209,7 +219,11 @@ export function ReleaseTable({
                   <h4 className="text-[0.8125rem] text-ice-200">
                     <span className="font-mono">{release.version}</span>
                     <span className="ml-2 text-ice-500">
-                      {editing ? '编辑更新说明（Markdown）' : '更新说明（Markdown 原文）'}
+                      {editing
+                        ? '编辑更新说明（Markdown）'
+                        : notesMode === 'render'
+                          ? '更新说明（桌面端看到的效果）'
+                          : '更新说明（Markdown 原文）'}
                       {release.mandatory ? ' · 必须更新' : ''}
                     </span>
                   </h4>
@@ -226,9 +240,21 @@ export function ReleaseTable({
                     onChange={(event) => setDraftNotes(event.target.value)}
                   />
                 ) : release.notes ? (
-                  <p className="whitespace-pre-line break-words text-[0.8125rem] leading-relaxed text-ice-300">
-                    {release.notes}
-                  </p>
+                  notesMode === 'render' ? (
+                    <Suspense
+                      fallback={
+                        <p className="whitespace-pre-line break-words text-[0.8125rem] leading-relaxed text-ice-300">
+                          {release.notes}
+                        </p>
+                      }
+                    >
+                      <Markdown text={release.notes} />
+                    </Suspense>
+                  ) : (
+                    <pre className="adm-raw-notes whitespace-pre-wrap break-words rounded-lg border border-line bg-[var(--msv-tint)] px-3 py-2.5 font-mono text-[0.75rem] leading-relaxed text-ice-300">
+                      {release.notes}
+                    </pre>
+                  )
                 ) : (
                   <p className="text-[0.8125rem] leading-relaxed text-ice-600">
                     这条版本没有写更新说明，桌面端的更新弹窗里那段就是空的。
@@ -283,6 +309,25 @@ export function ReleaseTable({
                   <Button variant="ghost" size="sm" onPress={() => setOpen(null)}>
                     关闭
                   </Button>
+                  {!editing && release.notes ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => setNotesMode(notesMode === 'render' ? 'raw' : 'render')}
+                    >
+                      {notesMode === 'render' ? (
+                        <>
+                          <Braces className="mr-1.5 size-3.5" />
+                          显示原文
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="mr-1.5 size-3.5" />
+                          预览效果
+                        </>
+                      )}
+                    </Button>
+                  ) : null}
                   {editing ? (
                     <Button variant="ghost" size="sm" onPress={() => setOpen({ kind: 'view', version: release.version })}>
                       取消编辑

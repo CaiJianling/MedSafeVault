@@ -20,7 +20,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ApiError, api, copyText } from '../lib/api'
 import { useConfirm } from '../lib/confirm'
 import { translateServerText, useI18n } from '../lib/i18n'
@@ -459,8 +459,14 @@ export function RecordsPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2.5">
-      <section className="panel-soft flex shrink-0 flex-wrap items-center gap-3 rounded-xl px-3.5 py-2.5">
-        <span className="relative grid size-10 shrink-0 place-items-center rounded-xl border border-[color-mix(in_srgb,var(--msv-accent)_22%,transparent)] bg-[linear-gradient(140deg,var(--msv-accent-soft),color-mix(in_srgb,var(--msv-accent)_4%,transparent))] text-[var(--msv-accent-text)]">
+      {/* 页面设了「标签颜色」时，这块说明区跟着同一支色：边框、渐变底、图标tile 与
+          说明里的强调图标都从 --page-color 派生（见 styles.css 的 msv-page-head）。 */}
+      <section
+        className="msv-page-head panel-soft flex shrink-0 flex-wrap items-center gap-3 rounded-xl px-3.5 py-2.5"
+        data-tint={page.color ? 'true' : undefined}
+        style={page.color ? ({ '--page-color': page.color } as CSSProperties) : undefined}
+      >
+        <span className="msv-page-head__icon relative grid size-10 shrink-0 place-items-center rounded-xl border border-[color-mix(in_srgb,var(--msv-accent)_22%,transparent)] bg-[linear-gradient(140deg,var(--msv-accent-soft),color-mix(in_srgb,var(--msv-accent)_4%,transparent))] text-[var(--msv-accent-text)]">
           <PageIcon name={page.icon} className="size-[19px]" />
           <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border-2 border-[var(--msv-surface)] bg-emerald-400" />
         </span>
@@ -480,7 +486,7 @@ export function RecordsPane({
             <NumText text={t('{n} 条记录', { n: total })} />
             <NumText text={t('{n} 个密码字段', { n: secretCount })} />
             <span className="hidden items-center gap-1 lg:inline-flex">
-              <ShieldCheck className="size-3 text-[var(--msv-accent-text)]" />
+              <ShieldCheck className="msv-page-head__accent size-3 text-[var(--msv-accent-text)]" />
               {t('全部字段已加密')}
             </span>
             <NumText text={t('更新于 {time}', { time: relativeTime(page.updated_at) })} />

@@ -52,8 +52,9 @@ export function ConnectMenu({
             aria-label={t('选择连接方式')}
             disabled={disabled}
             className={cn(
-              'inline-flex items-center justify-center gap-0.5 rounded-lg text-ice-500 transition',
-              'hover:bg-[var(--msv-tint-strong)] hover:text-ice-200 disabled:opacity-40',
+              // 行内颜色跟随 --row-*（自定义行色时一起翻面），表格外落回主题色阶。
+              'inline-flex items-center justify-center gap-0.5 rounded-lg text-[color:var(--row-ink-soft,var(--msv-ice-500))] transition',
+              'hover:bg-[var(--row-hover,var(--msv-tint-strong))] hover:text-[color:var(--row-ink,var(--msv-ice-200))] disabled:opacity-40',
               compact ? 'size-7 min-w-7' : 'h-8 px-2.5 text-[0.71875rem]',
             )}
           >

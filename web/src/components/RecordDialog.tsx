@@ -491,7 +491,7 @@ export function RecordDialog({
               />
             </div>
             <p className="mt-1.5 text-[0.65625rem] leading-relaxed text-ice-600">
-              {t('只影响列表里的这一行；文字颜色不填时跟随主题，深色背景请配浅色文字。')}
+              {t('只影响列表里的这一行；不填时跟随主题，底色太深会自动配浅色文字，文字色对比度不够时只调明度、保持色相，行内的图标与按钮也一起翻色。')}
             </p>
           </div>
 
