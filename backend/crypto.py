@@ -37,6 +37,7 @@ AAD_SECRET_FIELD = b"medsafe-vault/field-secret/v1"
 AAD_DEK = b"medsafe-vault/dek/v1"
 AAD_RECOVERY = b"medsafe-vault/recovery/v1"
 AAD_VERIFIER = b"medsafe-vault/verifier/v1"
+AAD_TOTP = b"medsafe-vault/totp/v1"
 
 # Two ciphertext tiers share the same JSON column. "v1:" is the ordinary field
 # key, "s1:" is derived from it through HKDF and only ever encrypts passwords,

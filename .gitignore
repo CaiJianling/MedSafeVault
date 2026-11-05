@@ -18,11 +18,19 @@ __pycache__/
 htmlcov/
 
 # ---------------------------------------------------------- 打包产物
-# build/ 是 PyInstaller 中间文件，dist/MedSafeVault.exe 由 tools/build_exe.py
-# 随时可重建（体积 24 MB，发布时走内部文件服务器或 Release 附件，不进版本库）。
-build/
-dist/
+# /build/ 是 PyInstaller 中间文件，/dist/MedSafeVault.exe 由 tools/build_exe.py
+# 随时可重建（体积 27 MB，发布时走内部文件服务器或 Release 附件，不进版本库）。
+# 两条都锚定在仓库根目录：update/web/dist/ 是管理后台的构建产物，需要入库，
+# 这样 Linux 服务器上拷走 update/ 就能直接跑，不用装 Node。
+/build/
+/dist/
 *.pyz
+# update/files/ 是等待分发的历史构建产物（每个 20 多 MB），由管理后台上传或
+# update/make_release.py 复制进去，不进版本库；versions.json 本身要入库。
+update/files/
+# 管理后台的登录凭据（PBKDF2 散列）与运行期缓存，属于服务器本地文件。
+update/admin.json
+update/web/node_modules/
 
 # 注意：assets/app.ico 与 assets/app.png 虽然由 tools/make_icon.py 生成，
 # 但体积极小且是打包的必需输入，保持入库。

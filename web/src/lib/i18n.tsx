@@ -1162,6 +1162,201 @@ const EN: Record<string, string> = {
   '点击窗口关闭按钮时默认最小化到通知区域：程序继续在后台运行，右键小图标可以打开主界面、锁定密码库或退出。': 'The window close button minimizes to the notification area by default: the app keeps running, and right-clicking the tray icon opens, locks, or quits.',
   '关闭行为可在 设置 → 常规 → 关闭按钮 中改为「直接退出」，也可以关掉「每次关闭时询问」；取消提示后窗口保持打开。': 'Change it to “Quit” under Settings → General → Close button, or turn off “Ask every time”; cancelling the prompt leaves the window open.',
   '窗口隐藏在托盘时，再次双击 MedSafeVault.exe 会唤回已打开的窗口，而不会再启动第二个实例。': 'While hidden in the tray, double-clicking MedSafeVault.exe again brings the existing window back instead of starting a second instance.',
+
+  // ------------------------------------------------------- two-factor (TOTP)
+  '两步验证（Authenticator）': 'Two-factor (authenticator app)',
+  '已开启': 'Enabled',
+  '未开启': 'Not enabled',
+  '正在读取状态…': 'Reading status…',
+  '无法读取两步验证状态': 'Cannot read the two-factor status',
+  '动态验证码': 'One-time code',
+  '请输入动态验证码': 'Enter the one-time code',
+  '请输入验证器上的 {n} 位动态验证码': 'Enter the {n}-digit code from your authenticator',
+  '来自手机验证器，每 30 秒换一个': 'From your phone authenticator, a new code every 30 s',
+  '输入打开密码与验证器上的 6 位动态码以继续。两者都只在本机校验。':
+    'Enter the master password and the 6-digit code from your authenticator. Both are checked on this machine only.',
+  '开启后，解锁保险库需要打开密码加上验证器上每 {n} 秒更换的动态验证码；兼容 Google Authenticator、微软身份验证器、FreeOTP 等标准 TOTP 应用。':
+    'When enabled, unlocking needs the master password plus the code that changes every {n} seconds; any standard TOTP app works — Google Authenticator, Microsoft Authenticator, FreeOTP.',
+  '开启前请准备一台装了验证器应用的手机。点击生成二维码后，{n} 分钟内扫码并输入一次动态验证码即可完成绑定；期间不输入正确验证码不会生效。':
+    'Have a phone with an authenticator app ready. After generating the QR code, scan it and enter one code within {n} minutes; nothing changes until the code is correct.',
+  '生成二维码并开始绑定': 'Generate a QR code and start binding',
+  '生成二维码失败': 'Could not generate the QR code',
+  '1. 在验证器应用里扫码；无法扫码时选「手动输入密钥」。':
+    '1. Scan this code with the authenticator app, or pick “Enter a setup key”.',
+  '2. 密钥也可以直接复制：': '2. Or copy the key directly:',
+  '复制密钥': 'Copy key',
+  '密钥已复制': 'Key copied',
+  '粘贴到验证器的「手动输入密钥」里。': 'Paste it into “Enter a setup key” in the app.',
+  '请手动抄写密钥': 'Please copy the key by hand',
+  '3. 输入验证器当前显示的 {n} 位验证码以确认绑定。':
+    '3. Enter the {n}-digit code the app shows right now to confirm.',
+  '账户名：{name} · 算法 {algorithm} · 有效期 {n} 秒':
+    'Account: {name} · algorithm {algorithm} · period {n} s',
+  '验证并开启': 'Verify and enable',
+  '本码剩余 {n} 秒': 'This code is valid for {n} s',
+  '验证失败': 'Verification failed',
+  '两步验证已开启': 'Two-factor is on',
+  '下次解锁需要打开密码加动态验证码。': 'Unlocking now needs the master password plus a one-time code.',
+  '取消失败': 'Cancel failed',
+  '绑定时间：{time}。修改打开密码不会影响已绑定的验证器；手机丢了可用恢复密钥重设密码，同时会自动解除绑定。':
+    'Bound at {time}. Changing the master password keeps the binding; if the phone is lost, the recovery key resets the password and clears the binding too.',
+  '关闭两步验证': 'Turn two-factor off',
+  '当前打开密码': 'Current master password',
+  '确认关闭': 'Confirm and turn off',
+  '两步验证已关闭': 'Two-factor is off',
+  '两步验证已一并解除': 'Two-factor binding cleared as well',
+  '手机丢失或不在手边也能重开密码库；下次解锁只需新密码，需要时请到 设置 → 安全 重新扫码绑定。':
+    'This is the escape hatch for a lost phone; the next unlock only needs the new password, and you can scan a fresh QR code under Settings → Security.',
+  '备份里的两步验证绑定已清除': 'The backup’s two-factor binding was cleared',
+  '恢复后只需输入新的打开密码；需要时请到 设置 → 安全 重新扫码绑定验证码。':
+    'Unlocking now only needs the restored password; re-enrol a code under Settings → Security if you want it back.',
+  '之后只需输入打开密码即可解锁。': 'From now on the master password is enough.',
+
+  // ------------------------------------------------------------------ updates
+  '版本更新': 'Software updates',
+  '更新服务地址': 'Update service address',
+  '检查更新': 'Check for updates',
+  '填写院内更新服务地址后，每次打开应用会自动检查一次版本；发现新版本时提示，下载的文件按 sha256 校验，替换与重启由后台助手完成，不需要管理员权限。':
+    'Once the intranet update endpoint is filled in, the app checks it once at start-up; a new version is offered, the download is verified by sha256, and a background helper replaces the exe and restarts it — no administrator rights needed.',
+  '留空即不检查。地址可以只填到主机与端口（例如 http://10.0.0.5:8000/），也可以直接填到 /api/version；服务端由 update/server.py 提供。':
+    'Leave empty to skip checking. A host and port is enough (for example http://10.0.0.5:8000/), or give the full /api/version path; the service side is update/server.py.',
+  '无法检查更新': 'Cannot check for updates',
+  '请稍后在设置 → 关于里手动检查': 'Try again later from Settings → About',
+  '正在联系更新服务…': 'Contacting the update service…',
+  '正在联系 {url}': 'Contacting {url}',
+  '无法连接更新服务': 'Cannot reach the update service',
+  '更新服务：{url}。请确认服务已启动、终端能访问该地址，并且 versions.json 已登记当前版本之后的版本。':
+    'Update service: {url}. Check that the service is running, that this terminal can reach the address, and that versions.json registers a version newer than the current one.',
+  '重新检查': 'Check again',
+  '发现新版本': 'New version available',
+  '当前版本 {v} → 新版本 {next}（{size}）': 'Current {v} → new {next} ({size})',
+  '大小未知': 'size unknown',
+  '版本号': 'Version',
+  '文件大小': 'File size',
+  '未知': 'Unknown',
+  '未提供': 'Not provided',
+  '发布时间': 'Released',
+  '该版本被标记为必须更新，建议尽快完成升级。':
+    'This release is marked mandatory, so upgrading soon is recommended.',
+  '以后再说': 'Not now',
+  '立即更新': 'Update now',
+  '正在下载更新': 'Downloading update',
+  '已下载 {done} / {all}': 'Downloaded {done} / {all}',
+  '正在校验 sha256…': 'Verifying sha256…',
+  '取消下载': 'Cancel download',
+  '无法开始下载': 'Could not start the download',
+  '下载失败': 'Download failed',
+  '更新已下载完成': 'Update downloaded',
+  '新程序已校验通过，保存在数据目录的 updates 文件夹。点击「立即重启并更新」后程序会退出并把新版本就位；万一窗口没有自动回来，直接双击 MedSafeVault.exe 就是新版本，旧版本留在 MedSafeVault.exe.old。':
+    'The new build passed verification and sits in the updates folder of the data directory. “Restart and update” quits the app and puts the new build in place; if the window does not come back on its own, double-click MedSafeVault.exe — it is already the new version, and the previous one stays as MedSafeVault.exe.old.',
+  '新程序已校验通过，保存在数据目录的 updates 文件夹。点击「立即重启并更新」后，后台助手会在本程序退出后替换并重新启动，无需管理员权限。':
+    'The new build passed verification and sits in the updates folder of the data directory. “Restart and update” hands the swap to a background helper that waits for this process to exit, replaces the exe and starts it again — no administrator rights needed.',
+  '立即重启并更新': 'Restart and update',
+  '正在更新': 'Updating',
+  '程序会短暂关闭后自动重新启动。': 'The app closes briefly and restarts on its own.',
+  '无法启动更新': 'Could not start the update',
+  '当前已是最新版本（{v}）。更新服务上的最新版是 {latest}。':
+    'This build is already current ({v}). The service offers {latest}.',
+  '尚未填写更新服务地址，请在设置 → 关于里填写后再检查。':
+    'No update service address is set yet; fill it in under Settings → About before checking.',
+
+  // ------------------------------------- backend two-factor and update messages
+  '请输入验证器里的 6 位动态验证码': 'Enter the 6-digit code from your authenticator',
+  '打开密码或动态验证码不正确': 'The master password or the one-time code is wrong',
+  '动态验证码不正确，请核对手机时间后重试':
+    'The one-time code is wrong; check the phone clock and try again',
+  '该验证码已经使用过，请等待下一个验证码': 'That code was already used; wait for the next one',
+  '动态验证码密钥已损坏，请使用恢复密钥重新绑定':
+    'The two-factor secret is damaged; use the recovery key and bind again',
+  '绑定已超时，请重新生成二维码': 'The binding timed out; generate a new QR code',
+  '请先生成二维码': 'Generate the QR code first',
+  '当前未开启动态验证码': 'Two-factor is not enabled right now',
+  '更新服务地址需要以 http:// 或 https:// 开头':
+    'The update service address must start with http:// or https://',
+  '更新服务地址过长': 'The update service address is too long',
+  '尚未填写更新服务地址': 'No update service address is set',
+  '更新服务返回的不是有效 JSON': 'The update service did not return valid JSON',
+  '更新服务返回格式不正确': 'The update service response is malformed',
+  '更新服务没有声明最新版本': 'The update service declares no latest version',
+  '更新服务没有提供下载地址': 'The update service offers no download URL',
+  '更新服务没有提供有效的 sha256': 'The update service provides no usable sha256',
+  '缺少下载地址': 'Missing download URL',
+  '更新包大小超出预期': 'The update package size exceeds the limit',
+  '更新包过大，已中止': 'The update package grew past the limit and was stopped',
+  '已取消下载': 'Download cancelled',
+  '请先检查更新': 'Run “Check for updates” first',
+  '更新正在下载中': 'An update is already downloading',
+  '开发模式下不替换程序，请手动更新 web/dist 与后端文件':
+    'In development mode the program is not replaced; update web/dist and the backend files by hand',
+  '开发模式下不替换程序': 'In development mode the program is not replaced',
+  '还没有下载完成': 'The download has not finished yet',
+  '下载文件已损坏，请重新下载': 'The downloaded file is damaged; download it again',
+
+  // ------------------------------------- composed backend messages (templates)
+  '请输入验证器里的 {n} 位动态验证码': 'Enter the {n}-digit code from your authenticator',
+  '无法连接更新服务：{reason}': 'Cannot reach the update service: {reason}',
+  '更新服务返回 {code}': 'The update service returned {code}',
+  '校验不通过：期望 {want}…，实际 {actual}…': 'Checksum mismatch: expected {want}…, got {actual}…',
+  '大小不符：期望 {want}，实际 {got}': 'Size mismatch: expected {want}, got {got}',
+  '{name} 仍被占用，无法替换': '{name} is still in use and cannot be replaced',
+  '下载失败：{reason}': 'Download failed: {reason}',
+  '检查更新失败：{reason}': 'Could not check for updates: {reason}',
+  '版本号格式不正确：{text}': 'Not a valid version number: {text}',
+  '更新服务：{url}': 'Update service: {url}',
+
+  // -------------------------------------------------- help: two-factor section
+  '两步验证（动态验证码）': 'Two-factor (one-time codes)',
+  '可选的第二重保险：解锁时除了打开密码，还要输入验证器 App 上每 30 秒更换的 6 位动态验证码（RFC 6238 TOTP）。共享密钥只在绑定时显示一次，之后以数据密钥加密保存在数据库里，不上传、不外传。':
+    'An optional second factor: unlocking also needs the 6-digit code that changes every 30 seconds in an authenticator app (RFC 6238 TOTP). The shared secret is shown once during enrolment and is then stored in the database sealed under the data key — never uploaded.',
+  '设置 → 安全 → 两步验证：点「生成二维码并开始绑定」。':
+    'Settings → Security → Two-factor: press “Generate a QR code and start binding”.',
+  '手机上的验证器扫码；不方便扫码时复制那段 Base32 密钥手动添加。':
+    'Scan it with the phone app, or copy the Base32 key and enter it by hand.',
+  '输入验证器当前显示的 6 位码并点「验证并开启」，绑定才真正生效。':
+    'Enter the 6-digit code the app shows now and press “Verify and enable”; only then does the binding take effect.',
+  '此后每次打开、每次自动锁定后重新解锁，都要「打开密码 + 动态验证码」。':
+    'From then on every unlock — first start or after an auto-lock — needs the master password plus a one-time code.',
+  '项目': 'Item',
+  '取值或说明': 'Value or note',
+  '兼容应用': 'Compatible apps',
+  'Google Authenticator、微软身份验证器、FreeOTP 等标准 TOTP 应用':
+    'Any standard TOTP app: Google Authenticator, Microsoft Authenticator, FreeOTP',
+  '参数': 'Parameters',
+  '绑定保持不变（改密码只重新包裹数据密钥，验证码密钥不受影响）。':
+    'The binding stays as it is — changing the password only re-wraps the data key.',
+  '手机丢了': 'Lost phone',
+  '用恢复密钥重设打开密码，绑定会同时自动解除，之后重新扫码绑定即可。':
+    'Reset the password with the recovery key; the binding is cleared at the same time and can be enrolled again.',
+  '导入备份': 'Restoring a backup',
+  '恢复备份同样会清除两步验证绑定，避免换机器后被旧手机卡住。':
+    'Restoring also clears the binding so an old phone cannot lock you out on another machine.',
+  '注意：同一个验证码在一次解锁用过之后会被拒绝重复使用，所以关掉再立刻打开时需要等下一个验证码；手机与本机时间相差超过 30 秒会一直验证失败，请先校准时钟。开启前请先确认恢复密钥已离线保存。':
+    'Note: a code is rejected once it has been used, so re-opening right away needs the next code; if the phone clock is off by more than 30 seconds verification keeps failing — sync it first. Save the recovery key offline before enabling this.',
+
+  // ----------------------------------------------------- help: update section
+  '内网版本更新': 'Intranet software updates',
+  '在科室里挑一台能长期开机的机器，用随源码附带的 update/server.py 起一个只读 HTTP 接口；把地址填进 设置 → 关于 → 更新服务地址，之后每次打开应用会自动检查一次版本。发现新版会提示，确认后下载、校验、替换并重启，全程不需要管理员权限，也不会访问外网。':
+    'Pick one always-on machine in the department and run the bundled update/server.py as a read-only HTTP endpoint; put its address in Settings → About → Update service address and each start checks once. A new version is offered, then downloaded, verified, swapped and restarted — no administrator rights and no internet access.',
+  '发布：python update/make_release.py --exe dist/MedSafeVault.exe --version 2.1.0 --notes "更新说明"，脚本会把安装包复制进 update/files 并写好版本号、大小与 sha256。':
+    'Publish: python update/make_release.py --exe dist/MedSafeVault.exe --version 2.1.0 --notes "release notes" — the script copies the build into update/files and records the version, size and sha256.',
+  '部署：python update/server.py --host 0.0.0.0 --port 8000，可开机自启。':
+    'Deploy: python update/server.py --host 0.0.0.0 --port 8000, started at boot if you like.',
+  '终端：在 设置 → 关于 → 更新服务地址 填 http://<服务器IP>:8000/ 并回车保存，随时可以点「检查更新」立刻验证。':
+    'Terminal: type http://<server IP>:8000/ into Settings → About → Update service address and press Enter to save; “Check for updates” verifies it immediately.',
+  '接口': 'Endpoints',
+  '完整性': 'Integrity',
+  '下载后按 versions.json 里的 sha256 与大小校验，不符直接拒绝安装。':
+    'The download is checked against the sha256 and size in versions.json; a mismatch refuses the install.',
+  '替换': 'Replacement',
+  '应用先就地把自己的 exe 改名成 MedSafeVault.exe.old、把新包写回原路径，再退出；重启由一个自删除的 update-relaunch.bat 延后几秒完成。万一窗口没自动回来，直接双击 MedSafeVault.exe 已经是新版本。':
+    'The app first renames its own exe to MedSafeVault.exe.old and writes the new build back to the original path, then quits; the restart is left to a self-deleting update-relaunch.bat that waits a few seconds. If the window does not return on its own, double-clicking MedSafeVault.exe already gives you the new version.',
+  '未填写地址': 'Address empty',
+  '完全不检查、不联网；留空即关闭该功能。': 'No check and no network at all; leaving it blank disables the feature.',
+  '开发模式': 'Development mode',
+  '用 python MedSafeVault.py 运行时只提示不替换，避免覆盖源码目录。':
+    'Running python MedSafeVault.py only notifies and never replaces, so the source tree stays intact.',
+  '注意：更新服务只发送 versions.json 中登记过的文件，目录之外的路径一律拒绝；接口本身没有鉴权，请只在内网网段开放并按需限制访问。替换失败时旧版本仍在 MedSafeVault.exe.old 里，可以手工改回。':
+    'Note: the service only serves files registered in versions.json and refuses anything outside that folder; the endpoint has no authentication, so keep it on the intranet and restrict access as needed. If the swap fails, the previous build is still in MedSafeVault.exe.old and can be renamed back by hand.',
 }
 
 const EN_MONTHS = [
@@ -1252,6 +1447,16 @@ const SERVER_PATTERNS: [RegExp, string][] = [
   [/^已在浏览器中打开 (?<address>.*)$/, '已在浏览器中打开 {address}'],
   [/^(?<n>\d+) 列：(?<rest>.*)$/, '{n} 列：{rest}'],
   [/^(?<n>\d+) 条记录$/, '{n} 条记录'],
+  // Two-factor and update messages the backend composes at runtime.
+  [/^请输入验证器里的 (?<n>\d+) 位动态验证码$/, '请输入验证器里的 {n} 位动态验证码'],
+  [/^无法连接更新服务：(?<reason>.*)$/, '无法连接更新服务：{reason}'],
+  [/^更新服务返回 (?<code>\d+)$/, '更新服务返回 {code}'],
+  [/^校验不通过：期望 (?<want>\S+)…，实际 (?<actual>\S+)…$/, '校验不通过：期望 {want}…，实际 {actual}…'],
+  [/^大小不符：期望 (?<want>[\d,]+)，实际 (?<got>[\d,]+)$/, '大小不符：期望 {want}，实际 {got}'],
+  [/^(?<name>[^\s]+) 仍被占用，无法替换$/, '{name} 仍被占用，无法替换'],
+  [/^下载失败：(?<reason>.*)$/, '下载失败：{reason}'],
+  [/^检查更新失败：(?<reason>.*)$/, '检查更新失败：{reason}'],
+  [/^版本号格式不正确：(?<text>.*)$/, '版本号格式不正确：{text}'],
 ]
 
 export function translateServerText(text: string | null | undefined): string {

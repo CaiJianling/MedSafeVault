@@ -42,12 +42,15 @@ export function LockScreen({
 }) {
   const { t } = useI18n()
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
   const [visible, setVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const codeRef = useRef<HTMLInputElement>(null)
 
   const autoLocked = state.lock_reason === 'auto'
+  const needsCode = Boolean(state.totp_required)
 
   async function submit(event?: FormEvent) {
     event?.preventDefault()
@@ -57,11 +60,17 @@ export function LockScreen({
       inputRef.current?.focus()
       return
     }
+    if (needsCode && !code) {
+      setError(t('请输入动态验证码'))
+      codeRef.current?.focus()
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const result = await api.unlock(password)
+      const result = await api.unlock(password, needsCode ? code : '')
       setPassword('')
+      setCode('')
       onUnlocked(result.state)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('解锁失败，请重试'))
@@ -158,7 +167,9 @@ export function LockScreen({
                 {t('解锁保险库')}
               </h2>
               <p className="mt-1 text-[0.78125rem] leading-relaxed text-ice-500">
-                {t('输入打开密码以继续。密码只在本机校验，不会被保存。')}
+                {needsCode
+                  ? t('输入打开密码与验证器上的 6 位动态码以继续。两者都只在本机校验。')
+                  : t('输入打开密码以继续。密码只在本机校验，不会被保存。')}
               </p>
 
               {autoLocked && (
@@ -206,6 +217,37 @@ export function LockScreen({
                     {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+
+                {needsCode && (
+                  <>
+                    <div className="mt-3 flex items-baseline justify-between gap-3">
+                      <label className="field-label !mb-0" htmlFor="unlock-totp">
+                        {t('动态验证码')}
+                      </label>
+                      <span className="text-[0.6875rem] text-ice-600">
+                        {t('来自手机验证器，每 30 秒换一个')}
+                      </span>
+                    </div>
+                    <input
+                      id="unlock-totp"
+                      ref={codeRef}
+                      className={cn(
+                        'msv-input mt-1.5 font-mono text-[1.0625rem] tracking-[0.42em]',
+                        error && 'border-rose-400/50',
+                      )}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={code}
+                      onChange={(event) => {
+                        setCode(event.target.value.replace(/\D/g, '').slice(0, 6))
+                        if (error) setError('')
+                      }}
+                    />
+                  </>
+                )}
+
                 <div className="min-h-[22px] pt-1.5 text-[0.71875rem] text-rose-300">{error}</div>
 
                 <button

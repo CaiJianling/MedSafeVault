@@ -12,7 +12,7 @@ from pathlib import Path
 
 import webview
 
-from backend import __version__, paths
+from backend import __version__, paths, updater
 from backend.api import Api
 from backend.paths import data_dir, log_path, resource_path, web_dir
 from backend.store import VaultService
@@ -167,6 +167,11 @@ def message_box(title: str, text: str, error: bool = False) -> None:
 
 
 def main() -> int:
+    if "--apply-update" in sys.argv:
+        # Detached updater helper: wait, swap the exe, relaunch. It must not
+        # touch logging, the mutex or the GUI, so this branch stays first.
+        index = sys.argv.index("--apply-update")
+        return updater.apply_cli(sys.argv[index + 1:])
     setup_logging()
     log.info("Starting MedSafeVault %s (frozen=%s)", __version__, getattr(sys, "frozen", False))
     log.info("Config file: %s", paths.config_path())

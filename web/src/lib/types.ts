@@ -83,6 +83,66 @@ export interface Settings {
   mask_usernames: boolean
   mask_addresses: boolean
   compact_rows: boolean
+  update_api_url: string
+}
+
+export interface TotpStatus {
+  enabled: boolean
+  enabled_at: string | null
+  pending: boolean
+  algorithm: string
+  digits: number
+  period: number
+  drift_steps: number
+  pending_minutes: number
+}
+
+export interface TotpBinding extends TotpStatus {
+  secret: string
+  uri: string
+  account: string
+  minutes: number
+}
+
+export type UpdateState =
+  | 'idle'
+  | 'checking'
+  | 'downloading'
+  | 'verifying'
+  | 'ready'
+  | 'restarting'
+  | 'error'
+
+export interface UpdateInfo {
+  checked_url: string
+  current: string
+  latest: string
+  available: boolean
+  version: string
+  notes: string
+  size: number
+  sha256: string
+  mandatory: boolean
+  released_at: string
+  download: string
+  filename: string
+}
+
+export interface UpdateCheckResult {
+  update: {
+    info: UpdateInfo
+    version: string
+    frozen: boolean
+  }
+}
+
+export interface UpdateSnapshot {
+  state: UpdateState
+  info: Partial<UpdateInfo>
+  progress: { percent?: number; received?: number; total?: number }
+  error: string
+  ready: boolean
+  file: string
 }
 
 export type ConnectionTransport = 'browser' | 'window' | 'external' | 'builtin'
@@ -173,6 +233,7 @@ export interface StateInfo {
   theme: string
   settings: Settings
   recovery: RecoveryStatus
+  totp_required: boolean
   version: string
   data_dir: string
   db_file: string

@@ -205,6 +205,16 @@ let initialized = demoMode !== 'setup'
 let locked = demoMode === 'setup' || demoMode === 'locked'
 let lockReason: string | null = demoMode === 'locked' ? 'auto' : null
 
+// Demo-only two-factor and update state. Nothing here encrypts anything: the
+// browser build has no backend, it only shows what the flow looks like.
+const DEMO_TOTP_SECRET = 'JBSWY3DPEHMLSR5HBFXKQY3BN5XCAZDP'
+const DEMO_UPDATE_VERSION = '9.9.9'
+let totpEnabled = false
+let totpPending = false
+let totpEnabledAt: string | null = null
+let updatePhase: 'idle' | 'downloading' | 'verifying' | 'ready' | 'error' = 'idle'
+let updateTicks = 0
+
 const DEMO_PORTABLE_DIR = 'MedSafeVaultData'
 export const DEMO_APPDATA_DIR = 'C:\\Users\\CaiJianling\\AppData\\Roaming\\MedSafeVault'
 
@@ -235,6 +245,7 @@ let settings: Settings = {
   mask_usernames: false,
   mask_addresses: false,
   compact_rows: false,
+  update_api_url: '',
 }
 
 /**
@@ -1173,6 +1184,7 @@ function stateInfo(): StateInfo {
       generation: 3,
     },
     version: '2.0.0',
+    totp_required: totpEnabled,
     data_dir: 'C:\\Users\\CaiJianling\\AppData\\Roaming\\MedSafeVault',
     db_file: 'C:\\Users\\CaiJianling\\AppData\\Roaming\\MedSafeVault\\vault.db',
     vault_id: '8f2c1d7a4b9e6f30',
@@ -1344,6 +1356,60 @@ function recoveryInfo() {
   }
 }
 
+function totpStatus() {
+  return {
+    enabled: totpEnabled,
+    enabled_at: totpEnabledAt,
+    pending: totpPending,
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    drift_steps: 1,
+    pending_minutes: 15,
+  }
+}
+
+const DEMO_UPDATE_SHA =
+  '9f2c8e6a1b4d70f3a5c8e2b6d1f4a7c0e3b9d2f6a1c4e8b5d0f3a7c2e9b6d4f1'
+
+function updateInfo() {
+  return {
+    checked_url: `${(settings.update_api_url || 'http://127.0.0.1:8000/').replace(/\/?$/, '')}/api/version`,
+    current: '2.0.0',
+    latest: DEMO_UPDATE_VERSION,
+    available: true,
+    version: DEMO_UPDATE_VERSION,
+    notes:
+      '演示数据：这里只显示更新流程的界面，浏览器演示模式不会真的下载或替换任何文件。真实更新由打包后的 exe 与院内 update/server.py 完成。',
+    size: 28227388,
+    sha256: DEMO_UPDATE_SHA,
+    mandatory: false,
+    released_at: '2026-11-04',
+    download: 'http://127.0.0.1:8000/download/9.9.9',
+    filename: 'MedSafeVault-9.9.9.exe',
+  }
+}
+
+function updateSnapshot() {
+  const percent =
+    updatePhase === 'ready'
+      ? 100
+      : updatePhase === 'verifying'
+        ? 99
+        : updatePhase === 'downloading'
+          ? Math.min(95, updateTicks * 18)
+          : 0
+  const total = updateInfo().size
+  return {
+    state: updatePhase,
+    info: updatePhase === 'idle' ? {} : updateInfo(),
+    progress: { percent, received: Math.round((total * percent) / 100), total },
+    error: '',
+    ready: updatePhase === 'ready',
+    file: updatePhase === 'ready' ? 'C:\\MedSafeVaultData\\updates\\MedSafeVault-9.9.9.exe' : '',
+  }
+}
+
 export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
   await sleep(method === 'get_bootstrap' ? 280 : method.includes('recovery') ? 320 : 90)
   const result = (() => {
@@ -1365,6 +1431,13 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
       case 'unlock': {
         const password = String(args[0] || '')
         if (password.length < 4) throw new Error('打开密码不正确')
+        if (totpEnabled) {
+          const code = String(args[1] || '').replace(/\D/g, '')
+          if (!code) throw new Error('请输入验证器里的 6 位动态验证码')
+          if (code.length !== 6 || code === '000000') {
+            throw new Error('打开密码或动态验证码不正确')
+          }
+        }
         locked = false
         lockReason = null
         return { state: stateInfo() }
@@ -1403,7 +1476,12 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         if (password.length < 8) throw new Error('打开密码至少需要 8 位')
         locked = false
         lockReason = null
-        return { state: stateInfo() }
+        // Same escape hatch as the backend: a lost phone must not brick the vault.
+        const cleared = totpEnabled
+        totpEnabled = false
+        totpEnabledAt = null
+        totpPending = false
+        return { state: stateInfo(), totp_reset: cleared }
       }
       case 'cancel_recovery':
         return { ok: true }
@@ -2043,6 +2121,7 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
           state: stateInfo(),
           info: { created_at: '2026-10-26 18:00:00', pages: 4, records: 31 },
           auto_backup: 'C:\\Users\\CaiJianling\\AppData\\Roaming\\MedSafeVault\\auto-before-restore-20261028.msvbackup',
+          totp_reset: totpEnabled,
         }
       case 'cancel_backup':
         return { ok: true }
@@ -2063,6 +2142,11 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
         if (patch.winscp_path != null) settings = { ...settings, winscp_path: String(patch.winscp_path) }
         if (patch.vnc_viewer_path != null)
           settings = { ...settings, vnc_viewer_path: String(patch.vnc_viewer_path) }
+        if (patch.update_api_url != null) {
+          const url = String(patch.update_api_url).trim()
+          if (url && !/^https?:\/\//i.test(url)) throw new Error('更新服务地址需要以 http:// 或 https:// 开头')
+          settings = { ...settings, update_api_url: url }
+        }
         if (
           patch.ssh_client != null &&
           ['auto', 'builtin', 'securecrt', 'putty', 'xshell', 'openssh'].includes(String(patch.ssh_client))
@@ -2224,6 +2308,80 @@ export async function mockCall<T>(method: string, args: unknown[]): Promise<T> {
       case 'get_environment':
         return {
           environment: { MEDSAFE_DATA_DIR: null, MSV_DEV_URL: 'http://localhost:5179', MSV_DEBUG: null },
+        }
+
+      // ---------------------------------------------------------- two-factor
+      case 'get_totp_status':
+        return { status: totpStatus() }
+      case 'start_totp_bind': {
+        requireUnlocked()
+        totpPending = true
+        const account = 'vault-8f2c1d7a'
+        return {
+          ...totpStatus(),
+          secret: DEMO_TOTP_SECRET,
+          uri:
+            `otpauth://totp/MedSafeVault%3A${account}?secret=${DEMO_TOTP_SECRET}` +
+            '&issuer=MedSafeVault&algorithm=SHA1&digits=6&period=30',
+          account,
+          minutes: 15,
+        }
+      }
+      case 'cancel_totp_bind':
+        requireUnlocked()
+        totpPending = false
+        return { status: totpStatus() }
+      case 'verify_totp_bind': {
+        requireUnlocked()
+        if (!totpPending) throw new Error('请先生成二维码')
+        const code = String(args[0] || '').replace(/\D/g, '')
+        if (code.length !== 6) throw new Error('请输入验证器上的 6 位动态验证码')
+        if (code === '000000') throw new Error('动态验证码不正确，请核对手机时间后重试')
+        totpPending = false
+        totpEnabled = true
+        totpEnabledAt = ISO(new Date())
+        return { status: totpStatus(), state: stateInfo() }
+      }
+      case 'disable_totp': {
+        requireUnlocked()
+        if (!totpEnabled) throw new Error('当前未开启动态验证码')
+        if (String(args[0] || '').length < 4) throw new Error('打开密码不正确')
+        const code = String(args[1] || '').replace(/\D/g, '')
+        if (code.length !== 6 || code === '000000') {
+          throw new Error('打开密码或动态验证码不正确')
+        }
+        totpEnabled = false
+        totpEnabledAt = null
+        return { status: totpStatus(), state: stateInfo() }
+      }
+
+      // ------------------------------------------------------------- updates
+      case 'check_update': {
+        if (!settings.update_api_url) throw new Error('尚未填写更新服务地址')
+        updatePhase = 'idle'
+        updateTicks = 0
+        return { update: { info: updateInfo(), version: '2.0.0', frozen: false } }
+      }
+      case 'download_update':
+        updatePhase = 'downloading'
+        updateTicks = 0
+        return { update: updateSnapshot() }
+      case 'get_update_status':
+        if (updatePhase === 'downloading') {
+          updateTicks += 1
+          if (updateTicks >= 6) updatePhase = 'ready'
+        }
+        return { update: updateSnapshot() }
+      case 'cancel_update':
+        updatePhase = 'idle'
+        updateTicks = 0
+        return { update: updateSnapshot() }
+      case 'install_update':
+        return {
+          update: {
+            target: 'D:\\MedSafeVault\\MedSafeVault.exe',
+            version: DEMO_UPDATE_VERSION,
+          },
         }
       case 'quit':
         return { ok: true }

@@ -14,8 +14,10 @@ import {
   Keyboard,
   Lightbulb,
   Monitor,
+  Rocket,
   Settings2,
   ShieldCheck,
+  Smartphone,
   SquareTerminal,
   Terminal,
   X,
@@ -28,12 +30,14 @@ type SectionId =
   | 'start'
   | 'crypto'
   | 'recovery'
+  | 'twofa'
   | 'folder'
   | 'backup'
   | 'excel'
   | 'remote'
   | 'terminal'
   | 'table'
+  | 'update'
   | 'env'
   | 'deploy'
   | 'faq'
@@ -42,12 +46,14 @@ const SECTIONS: { id: SectionId; title: string; icon: typeof BookOpen }[] = [
   { id: 'start', title: '快速上手', icon: BookOpen },
   { id: 'crypto', title: '加密与密钥', icon: ShieldCheck },
   { id: 'recovery', title: '恢复密钥', icon: KeyRound },
+  { id: 'twofa', title: '两步验证', icon: Smartphone },
   { id: 'folder', title: '数据目录', icon: FolderCog },
   { id: 'backup', title: '备份与迁移', icon: ArchiveRestore },
   { id: 'excel', title: 'Excel 导入导出', icon: FileSpreadsheet },
   { id: 'remote', title: '远程连接', icon: Monitor },
   { id: 'terminal', title: '内置终端与托盘', icon: SquareTerminal },
   { id: 'table', title: '列表与快捷键', icon: Keyboard },
+  { id: 'update', title: '版本更新', icon: Rocket },
   { id: 'env', title: '环境变量', icon: Terminal },
   { id: 'deploy', title: '终端部署', icon: HardDrive },
   { id: 'faq', title: '常见问题', icon: Lightbulb },
@@ -282,6 +288,52 @@ export function HelpDrawer({
         <div
           className="scroll-mt-2"
           ref={(node) => {
+            anchors.current.twofa = node
+          }}
+        >
+          <Heading>{t('两步验证（动态验证码）')}</Heading>
+          <Para>
+            {t(
+              '可选的第二重保险：解锁时除了打开密码，还要输入验证器 App 上每 30 秒更换的 6 位动态验证码（RFC 6238 TOTP）。共享密钥只在绑定时显示一次，之后以数据密钥加密保存在数据库里，不上传、不外传。',
+            )}
+          </Para>
+          <Steps
+            items={[
+              t('设置 → 安全 → 两步验证：点「生成二维码并开始绑定」。'),
+              t('手机上的验证器扫码；不方便扫码时复制那段 Base32 密钥手动添加。'),
+              t('输入验证器当前显示的 6 位码并点「验证并开启」，绑定才真正生效。'),
+              t('此后每次打开、每次自动锁定后重新解锁，都要「打开密码 + 动态验证码」。'),
+            ]}
+          />
+          <Table
+            head={[t('项目'), t('取值或说明')]}
+            rows={[
+              [t('兼容应用'), t('Google Authenticator、微软身份验证器、FreeOTP 等标准 TOTP 应用')],
+              [t('参数'), 'SHA-1 · 6 位 · 30 秒 · ±30 秒'],
+              [
+                t('修改打开密码'),
+                t('绑定保持不变（改密码只重新包裹数据密钥，验证码密钥不受影响）。'),
+              ],
+              [
+                t('手机丢了'),
+                t('用恢复密钥重设打开密码，绑定会同时自动解除，之后重新扫码绑定即可。'),
+              ],
+              [
+                t('导入备份'),
+                t('恢复备份同样会清除两步验证绑定，避免换机器后被旧手机卡住。'),
+              ],
+            ]}
+          />
+          <Para>
+            {t(
+              '注意：同一个验证码在一次解锁用过之后会被拒绝重复使用，所以关掉再立刻打开时需要等下一个验证码；手机与本机时间相差超过 30 秒会一直验证失败，请先校准时钟。开启前请先确认恢复密钥已离线保存。',
+            )}
+          </Para>
+        </div>
+
+        <div
+          className="scroll-mt-2"
+          ref={(node) => {
             anchors.current.folder = node
           }}
         >
@@ -438,6 +490,69 @@ export function HelpDrawer({
               t('设置 → 常规 中可切换列表等宽字体、界面字体与代码字体、界面大小（小/标准/大）、强调色与亮暗主题。'),
             ]}
           />
+        </div>
+
+        <div
+          className="scroll-mt-2"
+          ref={(node) => {
+            anchors.current.update = node
+          }}
+        >
+          <Heading>{t('内网版本更新')}</Heading>
+          <Para>
+            {t(
+              '在科室里挑一台能长期开机的机器，用随源码附带的 update/server.py 起一个只读 HTTP 接口；把地址填进 设置 → 关于 → 更新服务地址，之后每次打开应用会自动检查一次版本。发现新版会提示，确认后下载、校验、替换并重启，全程不需要管理员权限，也不会访问外网。',
+            )}
+          </Para>
+          <Steps
+            items={[
+              t(
+                '发布：python update/make_release.py --exe dist/MedSafeVault.exe --version 2.1.0 --notes "更新说明"，脚本会把安装包复制进 update/files 并写好版本号、大小与 sha256。',
+              ),
+              t('部署：python update/server.py --host 0.0.0.0 --port 8000，可开机自启。'),
+              t(
+                '终端：在 设置 → 关于 → 更新服务地址 填 http://<服务器IP>:8000/ 并回车保存，随时可以点「检查更新」立刻验证。',
+              ),
+            ]}
+          />
+          <Table
+            head={[t('项目'), t('说明')]}
+            rows={[
+              [
+                t('接口'),
+                <>
+                  <Code key="a">GET /api/version?current=2.0.0</Code>
+                  {t(' · ')}
+                  <Code key="b">GET /download/&lt;版本&gt;</Code>
+                  {t(' · ')}
+                  <Code key="c">GET /healthz</Code>
+                </>,
+              ],
+              [
+                t('完整性'),
+                t('下载后按 versions.json 里的 sha256 与大小校验，不符直接拒绝安装。'),
+              ],
+              [
+                t('替换'),
+                t(
+                  '应用先就地把自己的 exe 改名成 MedSafeVault.exe.old、把新包写回原路径，再退出；重启由一个自删除的 update-relaunch.bat 延后几秒完成。万一窗口没自动回来，直接双击 MedSafeVault.exe 已经是新版本。',
+                ),
+              ],
+              [
+                t('未填写地址'),
+                t('完全不检查、不联网；留空即关闭该功能。'),
+              ],
+              [
+                t('开发模式'),
+                t('用 python MedSafeVault.py 运行时只提示不替换，避免覆盖源码目录。'),
+              ],
+            ]}
+          />
+          <Para>
+            {t(
+              '注意：更新服务只发送 versions.json 中登记过的文件，目录之外的路径一律拒绝；接口本身没有鉴权，请只在内网网段开放并按需限制访问。替换失败时旧版本仍在 MedSafeVault.exe.old 里，可以手工改回。',
+            )}
+          </Para>
         </div>
 
         <div

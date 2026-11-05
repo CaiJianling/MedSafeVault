@@ -111,6 +111,13 @@ export function RecoveryDialog({
     try {
       const result = await api.finishRecovery(password)
       toast.success(t('打开密码已重设'), t('请使用新密码解锁密码库，并妥善保存恢复密钥'))
+      if (result.totp_reset) {
+        toast.warning(
+          t('两步验证已一并解除'),
+          t('手机丢失或不在手边也能重开密码库；下次解锁只需新密码，需要时请到 设置 → 安全 重新扫码绑定。'),
+          { duration: 9000 },
+        )
+      }
       onRecovered(result.state)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('重设密码失败，请重新导入恢复密钥'))

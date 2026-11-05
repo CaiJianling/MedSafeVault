@@ -1,0 +1,34 @@
+# MedSafeVault 更新服务（update/）—— 运行期依赖清单
+#
+# 结论：这个服务不需要任何第三方 Python 包。
+#   server.py / admin.py / common.py / make_release.py 全部只用标准库
+#   （http.server + hashlib + secrets + sqlite 无关），所以：
+#
+#       pip install -r update/requirements.txt
+#
+#   会是一个空操作，不会联网、不会装东西。Linux 服务器上只要装了
+#   python3（3.8 以上，绝大多数发行版的自带版本都够）就能跑：
+#
+#       python3 update/server.py --port 8000
+#
+# 为什么不引 Flask/FastAPI：科室的服务器和终端经常没有外网，装包要先解决
+# 离线源；而这里需要的功能（登录会话、multipart 之外的流式上传、静态站托管、
+# 断点续传）标准库都能覆盖，少一个依赖就少一次部署事故。
+#
+# --------------------------------------------------------------------
+# 可选组件（都不是 pip 装的，按需自己装系统包）：
+#
+#   * 80 端口 / HTTPS / 访问日志：nginx 反向代理到 127.0.0.1:8000
+#         apt install nginx      # 或 yum install nginx
+#     配置示例见 update/README.md 第 6 节。
+#
+#   * 开机自启：systemd（现代发行版自带，无需安装）
+#     unit 文件示例见 update/README.md 第 5 节。
+#
+#   * 重新构建管理页面（只在开发机上做，服务器上不需要）：
+#     Node.js 18+ 与仓库里 web/ 已有的依赖；update/web 通过目录链接复用
+#     web/node_modules，构建产物 update/web/dist 已经入库。
+#
+# --------------------------------------------------------------------
+# 客户端（桌面程序 MedSafeVault.exe）也不依赖这个文件：它自带 Python 运行时，
+# 更新逻辑在 backend/updater.py，同样只用标准库。

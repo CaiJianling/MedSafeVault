@@ -22,7 +22,11 @@ import type {
   SessionInfo,
   Settings,
   StateInfo,
+  TotpBinding,
+  TotpStatus,
   UndoState,
+  UpdateCheckResult,
+  UpdateSnapshot,
 } from './types'
 
 type Mode = 'native' | 'mock'
@@ -196,7 +200,8 @@ export const api = {
   getState: () => call<{ state: StateInfo }>('get_state'),
   initialize: (password: string) =>
     call<{ state: StateInfo; recovery: RecoveryInfo }>('initialize', password),
-  unlock: (password: string) => call<{ state: StateInfo }>('unlock', password),
+  unlock: (password: string, totpCode = '') =>
+    call<{ state: StateInfo }>('unlock', password, totpCode),
   lock: () => call<{ state: StateInfo }>('lock'),
   heartbeat: () =>
     call<{ locked: boolean; remaining_seconds: number | null }>('heartbeat'),
@@ -204,6 +209,23 @@ export const api = {
     call<{ locked: boolean; remaining_seconds: number | null }>('activity'),
   changeMasterPassword: (oldPassword: string, newPassword: string) =>
     call<{ ok: boolean }>('change_master_password', oldPassword, newPassword),
+
+  // Two-factor: enrolment is a pending secret until one live code proves it.
+  getTotpStatus: () => call<{ status: TotpStatus }>('get_totp_status'),
+  startTotpBind: () => call<TotpBinding>('start_totp_bind'),
+  cancelTotpBind: () => call<{ status: TotpStatus }>('cancel_totp_bind'),
+  verifyTotpBind: (code: string) =>
+    call<{ status: TotpStatus; state: StateInfo }>('verify_totp_bind', code),
+  disableTotp: (password: string, code: string) =>
+    call<{ status: TotpStatus; state: StateInfo }>('disable_totp', password, code),
+
+  // Intranet update service.
+  checkUpdate: () => call<UpdateCheckResult>('check_update'),
+  getUpdateStatus: () => call<{ update: UpdateSnapshot }>('get_update_status'),
+  downloadUpdate: () => call<{ update: UpdateSnapshot }>('download_update'),
+  cancelUpdate: () => call<{ update: UpdateSnapshot }>('cancel_update'),
+  installUpdate: () =>
+    call<{ update: { target: string; version: string } }>('install_update'),
 
   getRecoveryStatus: () => call<{ recovery: RecoveryStatus }>('get_recovery_status'),
   rotateRecovery: () =>
@@ -215,7 +237,7 @@ export const api = {
   startRecoveryWithCode: (code: string) =>
     call<{ ok: boolean; vault_id: string }>('start_recovery_with_code', code),
   finishRecovery: (newPassword: string) =>
-    call<{ state: StateInfo }>('finish_recovery', newPassword),
+    call<{ state: StateInfo; totp_reset: boolean }>('finish_recovery', newPassword),
   cancelRecovery: () => call<{ ok: boolean }>('cancel_recovery'),
 
   getTemplates: () => call<{ templates: PageTemplate[] }>('get_templates'),
@@ -356,10 +378,12 @@ export const api = {
   previewBackup: (password: string) =>
     call<{ info: BackupInfo }>('preview_backup', password),
   restoreBackup: (password: string) =>
-    call<{ state: StateInfo; info: BackupInfo; auto_backup: string | null }>(
-      'restore_backup',
-      password,
-    ),
+    call<{
+      state: StateInfo
+      info: BackupInfo
+      auto_backup: string | null
+      totp_reset: boolean
+    }>('restore_backup', password),
   cancelBackup: () => call<{ ok: boolean }>('cancel_backup'),
 
   setSettings: (patch: Partial<Settings>) =>

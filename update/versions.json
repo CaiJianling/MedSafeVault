@@ -1,0 +1,5 @@
+{
+  "_readme": "MedSafeVault 更新服务版本表。version 是版本号，file 是相对 update/ 目录的软件位置，size 与 sha256 可以留空由服务自动补齐。用 python update/make_release.py --exe dist/MedSafeVault.exe --version 2.1.0 --notes \"…\" 可以自动登记。",
+  "latest": "",
+  "releases": []
+}

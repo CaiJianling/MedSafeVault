@@ -17,6 +17,7 @@ import webview
 from . import __version__
 from . import clipboard
 from . import paths
+from . import updater
 from . import window_state
 from .paths import LocationError, data_dir
 from .crypto import is_backup_envelope
@@ -118,8 +119,24 @@ class Api:
             return {"state": result.get("state"), "recovery": recovery}
         return self._guard(action)
 
-    def unlock(self, password: str) -> dict:
-        return self._guard(lambda: self._service.unlock(password))
+    def unlock(self, password: str, totp_code: str = "") -> dict:
+        return self._guard(lambda: self._service.unlock(password, totp_code))
+
+    # ------------------------------------------------------------- two-factor
+    def get_totp_status(self) -> dict:
+        return self._guard(lambda: {"status": self._service.totp_status()})
+
+    def start_totp_bind(self) -> dict:
+        return self._guard(lambda: self._service.totp_begin())
+
+    def cancel_totp_bind(self) -> dict:
+        return self._guard(lambda: self._service.totp_cancel())
+
+    def verify_totp_bind(self, code: str) -> dict:
+        return self._guard(lambda: self._service.totp_verify(code))
+
+    def disable_totp(self, password: str, code: str) -> dict:
+        return self._guard(lambda: self._service.totp_disable(password, code))
 
     def lock(self) -> dict:
         def action():
@@ -599,6 +616,49 @@ class Api:
                     "MSV_DEBUG": os.environ.get("MSV_DEBUG", "").strip() or None,
                 }
             }
+        return self._guard(action)
+
+    # --------------------------------------------------------------- updates
+    def _update_guard(self, fn) -> dict:
+        """UpdateError is operator-facing prose, so surface it as a VaultError."""
+        try:
+            return fn()
+        except updater.UpdateError as exc:
+            raise VaultError(str(exc)) from exc
+
+    def check_update(self) -> dict:
+        def action():
+            def run():
+                url = self._service.get_settings().get("update_api_url") or ""
+                info = updater.job.check(url)
+                return {"info": info, "version": __version__, "frozen": bool(updater.target_exe())}
+            return {"update": self._update_guard(run)}
+        return self._guard(action)
+
+    def get_update_status(self) -> dict:
+        return self._guard(lambda: {"update": updater.job.snapshot()})
+
+    def download_update(self) -> dict:
+        def action():
+            def run():
+                updater.job.start_download()
+                return updater.job.snapshot()
+            return {"update": self._update_guard(run)}
+        return self._guard(action)
+
+    def cancel_update(self) -> dict:
+        return self._guard(lambda: {"update": updater.job.cancel()})
+
+    def install_update(self) -> dict:
+        """Hand the swap to the detached helper, then let this process exit."""
+        def action():
+            def run():
+                result = updater.job.install_and_restart()
+                # The helper waits for this pid, so the quit has to happen after
+                # the call returns to the renderer.
+                threading.Timer(0.4, self.quit).start()
+                return result
+            return {"update": self._update_guard(run)}
         return self._guard(action)
 
     # ------------------------------------------------------------ close/tray

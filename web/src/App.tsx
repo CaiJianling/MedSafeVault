@@ -20,6 +20,7 @@ import { RecoveryDialog } from './components/RecoveryDialog'
 import { RecordsPane } from './components/RecordsPane'
 import { SettingsDialog } from './components/SettingsDialog'
 import { SetupScreen } from './components/SetupScreen'
+import { UpdateDialog } from './components/UpdateDialog'
 import { TerminalOverlay, type TerminalTab } from './components/TerminalOverlay'
 import { Spinner } from './components/primitives'
 
@@ -106,6 +107,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [closePromptOpen, setClosePromptOpen] = useState(false)
+  const [updateOpen, setUpdateOpen] = useState(false)
 
   const themeMode = (theme === 'light' || theme === 'dark' ? theme : 'system') as ThemeMode
 
@@ -325,6 +327,28 @@ export default function App() {
     setLockedListener(handleSessionLocked)
     return () => setLockedListener(null)
   }, [handleSessionLocked])
+
+  // One silent version check per launch, and only when an endpoint is set.
+  // The dialog itself is opened from settings → 关于 as well.
+  const updateChecked = useRef(false)
+  useEffect(() => {
+    const url = state?.settings.update_api_url || ''
+    if (!url || updateChecked.current) return
+    updateChecked.current = true
+    api
+      .checkUpdate()
+      .then((result) => {
+        if (result.update.info.available) setUpdateOpen(true)
+      })
+      .catch((error) => {
+        // An unreachable file server must not interrupt daily work, but the
+        // operator should still hear about it once per launch.
+        toast.info(
+          t('无法检查更新'),
+          error instanceof ApiError ? error.message : t('请稍后在设置 → 关于里手动检查'),
+        )
+      })
+  }, [state, t])
 
   useEffect(() => {
     window.__msvNativeMessage = (title, message) => toast.info(title, message)
@@ -613,6 +637,8 @@ export default function App() {
             setDataVersion((value) => value + 1)
             void loadWorkspace()
           }}
+          onStateChange={(next) => setState(next)}
+          onCheckUpdate={() => setUpdateOpen(true)}
         />
 
         <TerminalOverlay
@@ -653,6 +679,12 @@ export default function App() {
         open={closePromptOpen}
         onOpenChange={setClosePromptOpen}
         defaultAction={state?.settings.close_action ?? 'tray'}
+      />
+      <UpdateDialog
+        open={updateOpen}
+        onOpenChange={setUpdateOpen}
+        url={state?.settings.update_api_url ?? ''}
+        version={state?.version ?? ''}
       />
       <Toaster />
     </ConfirmProvider>

@@ -58,6 +58,7 @@ import {
 } from './primitives'
 import { BackupPasswordDialog } from './BackupPasswordDialog'
 import { RecoveryCodeDialog } from './RecoveryCodeDialog'
+import { TotpPanel } from './TotpPanel'
 import {
   FALLBACK_CODE_FONTS,
   FALLBACK_UI_FONTS,
@@ -121,6 +122,8 @@ export function SettingsDialog({
   onLocale,
   onSettings,
   onRestored,
+  onStateChange,
+  onCheckUpdate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -131,11 +134,14 @@ export function SettingsDialog({
   onLocale: (locale: Locale) => void
   onSettings: (settings: Settings) => void
   onRestored: (state: StateInfo) => void
+  onStateChange: (state: StateInfo) => void
+  onCheckUpdate: () => void
 }) {
   const { t } = useI18n()
   const confirm = useConfirm()
   const [tab, setTab] = useState<Tab>('general')
   const [settings, setSettings] = useState<Settings>(state.settings)
+  const [updateUrl, setUpdateUrl] = useState(state.settings.update_api_url)
   const [savingKey, setSavingKey] = useState('')
 
   const [oldPassword, setOldPassword] = useState('')
@@ -204,6 +210,7 @@ export function SettingsDialog({
   useEffect(() => {
     if (open) {
       setSettings(state.settings)
+      setUpdateUrl(state.settings.update_api_url)
       setRecoveryStatus(state.recovery)
       setPasswordError('')
       setOldPassword('')
@@ -379,8 +386,16 @@ export function SettingsDialog({
     }
   }
 
-  async function chooseProgram(key: ProgramKey = 'securecrt_path', label = t('SecureCRT')) {
-    setSavingKey(key)
+  /** The update endpoint is free text: committed on blur, and before a manual
+   *  check, so clicking 检查更新 right after typing does not use the old value. */
+  function commitUpdateUrl(): Promise<void> {
+    const next = updateUrl.trim()
+    setUpdateUrl(next)
+    if (next === settings.update_api_url) return Promise.resolve()
+    return updateSettings({ update_api_url: next }, 'update_api_url')
+  }
+
+  async function chooseProgram(key: ProgramKey = 'securecrt_path', label = t('SecureCRT')) {    setSavingKey(key)
     try {
       const result = await api.chooseProgram(key)
       if (result.cancelled) return
@@ -530,6 +545,13 @@ export function SettingsDialog({
       )
       setBackupInfo(null)
       setBackupPassword('')
+      if (result.totp_reset) {
+        toast.warning(
+          t('备份里的两步验证绑定已清除'),
+          t('恢复后只需输入新的打开密码；需要时请到 设置 → 安全 重新扫码绑定验证码。'),
+          { duration: 9000 },
+        )
+      }
       onRestored(result.state)
       onOpenChange(false)
     } catch (error) {
@@ -1130,6 +1152,8 @@ export function SettingsDialog({
               </p>
             </Section>
 
+            <TotpPanel onState={onStateChange} />
+
             <Section title={t('安全边界')} description={t('这些机制共同保护数据库文件本身。')}>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {securityBoundary.map((item) => (
@@ -1610,6 +1634,49 @@ export function SettingsDialog({
                   </div>
                 ))}
               </div>
+            </Section>
+
+            <Section
+              title={t('版本更新')}
+              description={t(
+                '填写院内更新服务地址后，每次打开应用会自动检查一次版本；发现新版本时提示，下载的文件按 sha256 校验，替换与重启由后台助手完成，不需要管理员权限。',
+              )}
+            >
+              <label className="field-label" htmlFor="update-api-url">
+                {t('更新服务地址')}
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="update-api-url"
+                  className="msv-input min-w-[220px] flex-1 font-mono text-[0.75rem]"
+                  placeholder="http://10.0.0.5:8000/"
+                  spellCheck={false}
+                  value={updateUrl}
+                  onChange={(event) => setUpdateUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitUpdateUrl()
+                    }
+                  }}
+                  onBlur={commitUpdateUrl}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void commitUpdateUrl().then(onCheckUpdate)
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[0.75rem] text-ice-300 transition hover:border-line-strong hover:bg-[var(--msv-tint)]"
+                >
+                  <RefreshCw className="size-3.5" />
+                  {t('检查更新')}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[0.6875rem] leading-relaxed text-ice-600">
+                {t(
+                  '留空即不检查。地址可以只填到主机与端口（例如 http://10.0.0.5:8000/），也可以直接填到 /api/version；服务端由 update/server.py 提供。',
+                )}
+              </p>
             </Section>
 
             {about && (

@@ -18,7 +18,9 @@ from datetime import datetime
 from typing import Any, Iterable
 
 from . import __version__
+from . import totp as totp_lib
 from .crypto import (
+    AAD_TOTP,
     SECRET_TOKEN_PREFIX,
     TOKEN_PREFIX,
     CryptoError,
@@ -40,9 +42,11 @@ from .crypto import (
     open_backup,
     seal_backup,
     open_field,
+    open_text,
     password_score,
     random_password,
     seal_field,
+    seal_text,
     token_prefix,
     unwrap_dek,
     unwrap_from_recovery,
@@ -62,6 +66,8 @@ ACCENTS = (
 # Windows names contain parentheses, commas and CJK, which the old allowlist
 # rejected and made the Settings pickers look dead.
 _FONT_BAD_RE = re.compile(r'["\\;{}<>\r\n\t]')
+# Intranet update endpoint: scheme, no whitespace, no shell metacharacters.
+_UPDATE_URL_RE = re.compile(r"^https?://[^\s<>\"'`|&;{}]+$", re.I)
 
 
 def _clean_font_name(value: object) -> str:
@@ -411,6 +417,7 @@ class VaultService:
             "accent": "blue",
             "ui_font": "",
             "code_font": "",
+            "update_api_url": "",
         }
         raw = _loads(self._meta_get("settings"), {})
         if not isinstance(raw, dict):
@@ -509,8 +516,22 @@ class VaultService:
             for flag in ("mask_usernames", "mask_addresses", "compact_rows"):
                 if flag in patch:
                     settings[flag] = bool(patch[flag])
+            if "update_api_url" in patch:
+                settings["update_api_url"] = self._clean_update_url(patch["update_api_url"])
             self._save_settings(settings)
             return settings
+
+    @staticmethod
+    def _clean_update_url(value: object) -> str:
+        """An intranet update endpoint: plain http(s) URL, nothing fancier."""
+        url = str(value or "").strip()
+        if not url:
+            return ""
+        if len(url) > 500:
+            raise VaultError("更新服务地址过长")
+        if not _UPDATE_URL_RE.match(url):
+            raise VaultError("更新服务地址需要以 http:// 或 https:// 开头")
+        return url
 
     # -------------------------------------------------------------- lifecycle
     def _remaining_seconds(self) -> int | None:
@@ -592,6 +613,7 @@ class VaultService:
                 "theme": settings["theme"],
                 "settings": settings,
                 "recovery": self.recovery_status(),
+                "totp_required": self.totp_required(),
                 "version": __version__,
                 "data_dir": str(data_dir()),
                 "db_file": self.db_file,
@@ -641,7 +663,7 @@ class VaultService:
             log.info("Vault initialized at %s", self.db_file)
             return {"recovery": recovery, "state": self.get_state()}
 
-    def unlock(self, password: str) -> dict:
+    def unlock(self, password: str, totp_code: str | None = None) -> dict:
         with self._lock:
             if not self.has_master():
                 raise VaultError("密码库尚未初始化")
@@ -654,11 +676,52 @@ class VaultService:
                 raise VaultError("打开密码不正确")
             if not check_verifier(dek, self._meta_get("verifier") or ""):
                 raise VaultError("打开密码不正确")
+            # Second factor, only after the password has been proven. The
+            # failure text is deliberately the same whichever half went wrong:
+            # a distinct "验证码不正确" would tell anyone brute-forcing the
+            # password that they had just guessed it right.
+            if self._meta_get("totp_secret"):
+                self._check_totp(dek, totp_code, "打开密码或动态验证码不正确")
             self._set_key(dek)
             self.lock_reason = None
             self.pending_dek = None
             self.last_activity = time.monotonic()
             return {"state": self.get_state()}
+
+    def _check_totp(self, dek: bytes, code: str | None, failure: str) -> None:
+        """Verify a code against the sealed secret and remember what was used."""
+        token = self._meta_get("totp_secret")
+        if not token:
+            return
+        digits = totp_lib.DIGITS
+        raw = re.sub(r"\s", "", str(code or ""))
+        if not raw:
+            raise VaultError(f"请输入验证器里的 {digits} 位动态验证码")
+        try:
+            secret = open_text(dek, token, AAD_TOTP)
+        except CryptoError:
+            raise VaultError("动态验证码密钥已损坏，请使用恢复密钥重新绑定")
+        try:
+            ok, step = totp_lib.verify(secret, raw)
+        except ValueError:
+            raise VaultError("动态验证码密钥已损坏，请使用恢复密钥重新绑定")
+        if not ok:
+            raise VaultError(failure)
+        last = self._totp_last(dek)
+        if last and last.get("step") == step and last.get("code") == re.sub(r"\D", "", raw):
+            raise VaultError("该验证码已经使用过，请等待下一个验证码")
+        self._meta_set("totp_last", seal_text(
+            dek, _json({"step": step, "code": re.sub(r"\D", "", raw)}), AAD_TOTP))
+        self.conn.commit()
+
+    def _totp_last(self, dek: bytes) -> dict | None:
+        token = self._meta_get("totp_last")
+        if not token:
+            return None
+        try:
+            return _loads(open_text(dek, token, AAD_TOTP), None)
+        except CryptoError:
+            return None
 
     def change_master_password(self, old_password: str, new_password: str) -> dict:
         with self._lock:
@@ -683,6 +746,133 @@ class VaultService:
             self.conn.commit()
             log.info("Master password changed")
             return {"ok": True}
+
+    # ------------------------------------------------------------- two-factor
+    def totp_required(self) -> bool:
+        """Whether unlocking now also needs an authenticator code.
+
+        Only the flag is read, never the secret, so the lock screen can ask for
+        the code before the vault has been opened.
+        """
+        return bool(self._meta_get("totp_secret"))
+
+    def totp_status(self) -> dict:
+        with self._lock:
+            pending_epoch = self._meta_get("totp_pending_epoch")
+            pending = bool(self._meta_get("totp_pending_secret"))
+            if pending and pending_epoch:
+                try:
+                    if time.time() - float(pending_epoch) > totp_lib.PENDING_MINUTES * 60:
+                        pending = False
+                except ValueError:
+                    pending = False
+            return {
+                "enabled": bool(self._meta_get("totp_secret")),
+                "enabled_at": self._meta_get("totp_enabled_at"),
+                "pending": pending,
+                "algorithm": totp_lib.ALGORITHM,
+                "digits": totp_lib.DIGITS,
+                "period": totp_lib.PERIOD,
+                "drift_steps": totp_lib.DRIFT_STEPS,
+                "pending_minutes": totp_lib.PENDING_MINUTES,
+            }
+
+    def totp_begin(self) -> dict:
+        """Start enrolment: a fresh secret, kept pending until one code proves it."""
+        with self._lock:
+            self._ensure_unlocked()
+            secret = totp_lib.new_secret()
+            vault_id = self._meta_get("vault_id") or "local"
+            account = f"vault-{vault_id[:8]}"
+            self._meta_set(
+                "totp_pending_secret",
+                seal_text(self.key, secret, AAD_TOTP),
+            )
+            self._meta_set("totp_pending_epoch", str(time.time()))
+            self.conn.commit()
+            log.info("TOTP enrolment started")
+            return {
+                "secret": secret,
+                "uri": totp_lib.provisioning_uri(secret, account),
+                "account": account,
+                "algorithm": totp_lib.ALGORITHM,
+                "digits": totp_lib.DIGITS,
+                "period": totp_lib.PERIOD,
+                "minutes": totp_lib.PENDING_MINUTES,
+                "status": self.totp_status(),
+            }
+
+    def totp_cancel(self) -> dict:
+        with self._lock:
+            self._ensure_unlocked()
+            self._totp_clear_pending()
+            return {"status": self.totp_status()}
+
+    def totp_verify(self, code: str) -> dict:
+        """Turn a pending enrolment into an enabled binding."""
+        with self._lock:
+            self._ensure_unlocked()
+            token = self._meta_get("totp_pending_secret")
+            if not token:
+                raise VaultError("请先生成二维码")
+            epoch = self._meta_get("totp_pending_epoch")
+            try:
+                age = time.time() - float(epoch or 0)
+            except ValueError:
+                age = 0.0
+            if age > totp_lib.PENDING_MINUTES * 60:
+                self._totp_clear_pending()
+                raise VaultError("绑定已超时，请重新生成二维码")
+            secret = open_text(self.key, token, AAD_TOTP)
+            ok, step = totp_lib.verify(secret, code)
+            if not ok:
+                raise VaultError("动态验证码不正确，请核对手机时间后重试")
+            self._meta_set("totp_secret", token)
+            self._meta_set("totp_enabled_at", now_text())
+            self._meta_set(
+                "totp_last",
+                seal_text(self.key, _json({"step": step, "code": ""}), AAD_TOTP),
+            )
+            self._totp_clear_pending(commit=False)
+            self.conn.commit()
+            log.info("TOTP binding enabled")
+            return {"status": self.totp_status(), "state": self.get_state()}
+
+    def totp_disable(self, password: str, code: str) -> dict:
+        """Dropping the second factor costs the password and a live code."""
+        with self._lock:
+            self._ensure_unlocked()
+            if not self._meta_get("totp_secret"):
+                raise VaultError("当前未开启动态验证码")
+            salt = b64d(self._meta_get("salt_master") or "")
+            iterations = int(self._meta_get("iterations_master") or KDF_ITERATIONS)
+            try:
+                dek = unwrap_dek(derive_kek(password, salt, iterations),
+                                 self._meta_get("wrap_master") or "")
+            except CryptoError:
+                raise VaultError("打开密码不正确")
+            if not check_verifier(dek, self._meta_get("verifier") or ""):
+                raise VaultError("打开密码不正确")
+            self._check_totp(dek, code, "打开密码或动态验证码不正确")
+            self._totp_clear_all(commit=False)
+            self.conn.commit()
+            log.info("TOTP binding removed")
+            return {"status": self.totp_status(), "state": self.get_state()}
+
+    def _totp_clear_pending(self, commit: bool = True) -> None:
+        self.conn.execute(
+            "DELETE FROM meta WHERE k IN ('totp_pending_secret', 'totp_pending_epoch')"
+        )
+        if commit:
+            self.conn.commit()
+
+    def _totp_clear_all(self, commit: bool = True) -> None:
+        self.conn.execute(
+            "DELETE FROM meta WHERE k IN ('totp_pending_secret', 'totp_pending_epoch',"
+            " 'totp_secret', 'totp_enabled_at', 'totp_last')"
+        )
+        if commit:
+            self.conn.commit()
 
     # --------------------------------------------------------------- recovery
     def recovery_status(self) -> dict:
@@ -830,8 +1020,16 @@ class VaultService:
             self.pending_dek = None
             self.lock_reason = None
             self.last_activity = time.monotonic()
-            log.info("Master password reset through recovery key")
-            return {"state": self.get_state()}
+            # The recovery key is the escape hatch for a lost phone as well:
+            # keeping an unreachable authenticator binding would turn "I forgot
+            # the password" into "the vault is bricked".
+            had_totp = bool(self._meta_get("totp_secret"))
+            if had_totp:
+                self._totp_clear_all(commit=False)
+                self.conn.commit()
+            log.info(
+                "Master password reset through recovery key (totp reset: %s)", had_totp)
+            return {"state": self.get_state(), "totp_reset": had_totp}
 
     def cancel_recovery(self) -> None:
         with self._lock:
@@ -2842,12 +3040,24 @@ class VaultService:
             except Exception:
                 self.conn.rollback()
                 raise
+            had_totp = bool(self._meta_get("totp_secret"))
+            if had_totp:
+                # Same reasoning as the recovery flow: whoever restored this
+                # backup proved access with the backup password, and the phone
+                # that enrolled the original binding may not be in reach.
+                self._totp_clear_all(commit=False)
+                self.conn.commit()
             self._set_key(dek)
             self.pending_dek = None
             self.lock_reason = None
             self.last_activity = time.monotonic()
             log.info("Backup restored (%s pages, %s records)", len(pages), len(records))
-            return {"state": self.get_state(), "info": info, "auto_backup": auto_backup}
+            return {
+                "state": self.get_state(),
+                "info": info,
+                "auto_backup": auto_backup,
+                "totp_reset": had_totp,
+            }
 
     def close(self) -> None:
         try:
